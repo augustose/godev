@@ -81,10 +81,20 @@ godev_function() {
 
     # --- BÚSQUEDA DE PROYECTOS ---
     # Buscar directorios que contengan el patrón (búsqueda recursiva 1 nivel)
-    local matches=()
+    local all_matches=()
     while IFS= read -r -d '' dir; do
-        matches+=("$dir")
+        all_matches+=("$dir")
     done < <(find "$BASE_DIR" -maxdepth 2 -type d -iname "*${PATTERN}*" -print0 2>/dev/null)
+
+    # Filtrar resultados: excluir BASE_DIR y directorio del script
+    local matches=()
+    local SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    for dir in "${all_matches[@]}"; do
+        # Excluir el BASE_DIR mismo y el directorio donde está el script
+        if [ "$dir" != "$BASE_DIR" ] && [ "$dir" != "$SCRIPT_DIR" ]; then
+            matches+=("$dir")
+        fi
+    done
 
     local count=${#matches[@]}
 
