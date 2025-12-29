@@ -1,7 +1,10 @@
 #!/bin/zsh
 
 # godev - Navegar a directorios de proyectos de desarrollo
-# Uso: godev <patrón> [-f]
+# Uso: godev <patrón> [-f] [-v]
+# Versión: 1.0.0
+
+VERSION="1.0.0"
 
 # Directorio base de proyectos (ajusta según tu configuración)
 DEV_BASE="${HOME}/DEV"
@@ -19,19 +22,48 @@ fi
 
 # Función principal
 _godev_func() {
-    local pattern="$1"
+    local pattern=""
     local force_create=false
     
-    # Verificar si se pasó el flag -f
-    if [[ "$2" == "-f" ]] || [[ "$1" == "-f" && -n "$2" ]]; then
-        force_create=true
-        [[ "$1" == "-f" ]] && pattern="$2"
-    fi
+    # Procesar argumentos
+    for arg in "$@"; do
+        case "$arg" in
+            -v|--version)
+                echo "godev versión $VERSION"
+                return 0
+                ;;
+            -f|--force)
+                force_create=true
+                ;;
+            -h|--help)
+                echo "godev - Navegar a directorios de proyectos de desarrollo"
+                echo ""
+                echo "Uso: godev <patrón> [-f] [-v]"
+                echo ""
+                echo "Opciones:"
+                echo "  <patrón>        Patrón de búsqueda del directorio"
+                echo "  -f, --force     Forzar creación del directorio si no existe"
+                echo "  -v, --version   Mostrar versión del script"
+                echo "  -h, --help      Mostrar esta ayuda"
+                return 0
+                ;;
+            -*)
+                echo "Opción desconocida: $arg"
+                echo "Usa 'godev -h' para ver la ayuda"
+                return 1
+                ;;
+            *)
+                pattern="$arg"
+                ;;
+        esac
+    done
     
     # Verificar que se proporcionó un patrón
     if [[ -z "$pattern" ]]; then
-        echo "Uso: godev <patrón> [-f]"
-        echo "  -f: Forzar creación del directorio si no existe"
+        echo "Uso: godev <patrón> [-f] [-v]"
+        echo "  -f, --force     Forzar creación del directorio si no existe"
+        echo "  -v, --version   Mostrar versión"
+        echo "  -h, --help      Mostrar ayuda completa"
         return 1
     fi
     
@@ -84,4 +116,3 @@ _godev_func() {
 
 # Ejecutar la función
 _godev_func "$@"
-echo "godev version 1.0"
