@@ -44,16 +44,30 @@
 
 VERSION="2.0.0"
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-MAGENTA='\033[0;35m'
-CYAN='\033[0;36m'
-WHITE='\033[1;37m'
-GRAY='\033[0;90m'
-NC='\033[0m' # No Color
+# Detect if output is to a terminal
+if [[ -t 1 ]]; then
+    # Colors for output (only if terminal)
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    BLUE='\033[0;34m'
+    MAGENTA='\033[0;35m'
+    CYAN='\033[0;36m'
+    WHITE='\033[1;37m'
+    GRAY='\033[0;90m'
+    NC='\033[0m' # No Color
+else
+    # No colors if not a terminal
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    MAGENTA=''
+    CYAN=''
+    WHITE=''
+    GRAY=''
+    NC=''
+fi
 
 # Base projects directory (adjust according to your configuration)
 DEV_BASE="${HOME}/DEV"
@@ -64,33 +78,30 @@ READONLY_MODE=true  # Set to false to allow directory creation (for testing)
 
 # Show help
 show_help() {
-    cat << EOF
-${WHITE}godev${NC} - Multi-Folder Development Tree Demystification Tool
-
-${CYAN}USAGE:${NC}
-    godev <command> [options]
-
-${CYAN}COMMANDS:${NC}
-    ${GREEN}nav, n${NC} <pattern>        Navigate to project (default command)
-    ${GREEN}status, s${NC} [options]     Show project activity status
-    ${GREEN}list, l${NC}                 List all projects
-    ${GREEN}ai-status${NC}               Check AI development tools status
-    ${GREEN}version, v${NC}              Show version
-    ${GREEN}help, h${NC}                 Show this help
-
-${CYAN}EXAMPLES:${NC}
-    godev nav react          # Navigate to react project
-    godev react              # Same (nav is default)
-    godev status             # Show all project statuses
-    godev status -f 7        # Show active in last 7 days
-    godev list               # List all projects
-    godev ai-status          # Check AI tools
-
-${CYAN}NOTE:${NC}
-    This tool works in ${YELLOW}readonly mode${NC} by default during testing.
-    It will ${YELLOW}not modify${NC} your development folder structure.
-
-EOF
+    echo -e "${WHITE}godev${NC} - Multi-Folder Development Tree Demystification Tool"
+    echo ""
+    echo -e "${CYAN}USAGE:${NC}"
+    echo "    godev <command> [options]"
+    echo ""
+    echo -e "${CYAN}COMMANDS:${NC}"
+    echo -e "    ${GREEN}nav, n${NC} <pattern>        Navigate to project (default command)"
+    echo -e "    ${GREEN}status, s${NC} [options]     Show project activity status"
+    echo -e "    ${GREEN}list, l${NC}                 List all projects"
+    echo -e "    ${GREEN}ai-status${NC}               Check AI development tools status"
+    echo -e "    ${GREEN}version, v${NC}              Show version"
+    echo -e "    ${GREEN}help, h${NC}                 Show this help"
+    echo ""
+    echo -e "${CYAN}EXAMPLES:${NC}"
+    echo "    godev nav react          # Navigate to react project"
+    echo "    godev react              # Same (nav is default)"
+    echo "    godev status             # Show all project statuses"
+    echo "    godev status -f 7        # Show active in last 7 days"
+    echo "    godev list               # List all projects"
+    echo "    godev ai-status          # Check AI tools"
+    echo ""
+    echo -e "${CYAN}NOTE:${NC}"
+    echo -e "    This tool works in ${YELLOW}readonly mode${NC} by default during testing."
+    echo -e "    It will ${YELLOW}not modify${NC} your development folder structure."
 }
 
 # Main command dispatcher
