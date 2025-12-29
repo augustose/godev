@@ -125,11 +125,19 @@ show_help() {
 # Main command dispatcher
 main() {
     local command="$1"
-    shift
+    # Only shift if we have arguments
+    if [[ $# -gt 0 ]]; then
+        shift
+    fi
     
-    # If no command provided, default to nav (for backward compatibility)
-    if [[ -z "$command" ]] || [[ "$command" == -* ]]; then
-        # Check if it's a version or help flag
+    # If no command provided, show help
+    if [[ -z "$command" ]]; then
+        show_help
+        exit 0
+    fi
+    
+    # Check if it's a flag
+    if [[ "$command" == -* ]]; then
         case "$command" in
             -v|--version)
                 echo "godev version $VERSION+build.$BUILD"
@@ -140,7 +148,7 @@ main() {
                 exit 0
                 ;;
             *)
-                # Default to nav command
+                # Unknown flag, treat as nav pattern
                 nav_command "$command" "$@"
                 return
                 ;;
@@ -216,6 +224,13 @@ nav_command() {
     # Verify that the base directory exists
     if [[ ! -d "$DEV_BASE" ]]; then
         echo -e "${RED}Error: Base directory $DEV_BASE does not exist${NC}" >&2
+        echo ""
+        echo "To fix this, you can:"
+        echo "  1. Create the directory: ${GREEN}mkdir -p $DEV_BASE${NC}"
+        echo "  2. Or set a custom base directory using the DEV_BASE variable in the script"
+        echo ""
+        echo "The default base directory is: ${YELLOW}~/DEV${NC}"
+        echo "You can change it by editing the DEV_BASE variable in the godev script."
         return 1
     fi
     
@@ -371,6 +386,11 @@ status_command() {
     # Verify that the base directory exists
     if [[ ! -d "$status_dev_base" ]]; then
         echo -e "${RED}Error: Base directory $status_dev_base does not exist${NC}" >&2
+        echo ""
+        echo "To fix this, you can:"
+        echo "  1. Create the directory: ${GREEN}mkdir -p $status_dev_base${NC}"
+        echo "  2. Or specify a different directory: ${GREEN}godev status -d /path/to/projects${NC}"
+        echo "  3. Or set a custom base directory using the DEV_BASE variable in the script"
         return 1
     fi
     

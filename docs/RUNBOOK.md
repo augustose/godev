@@ -49,6 +49,48 @@ El script detecta automáticamente cómo está siendo ejecutado:
 - **Piped curl**: Cuando se ejecuta mediante `curl ... | zsh`, el script descarga el archivo `godev` desde GitHub y lo instala en `~/.local/bin`
 - **Archivo local**: Cuando se ejecuta desde un repositorio clonado, usa el archivo `godev` del mismo directorio
 
+### Actualización de godev
+
+Para actualizar `godev` a la última versión, simplemente ejecuta el mismo comando de instalación:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/augustose/godev/main/install.sh | zsh
+```
+
+El script detectará automáticamente que `godev` ya está instalado y te preguntará si deseas actualizarlo. El proceso de actualización:
+
+1. **Detecta la versión instalada**: Muestra la versión actual si está disponible
+2. **Pregunta por confirmación**: Te permite confirmar antes de sobrescribir
+3. **Descarga la última versión**: Obtiene la versión más reciente desde GitHub
+4. **Reemplaza el script**: Actualiza el archivo en `~/.local/bin/godev`
+5. **Mantiene la configuración**: No modifica tu PATH ni otras configuraciones
+
+**Nota**: Si `godev` está en tu PATH, podrás usar la nueva versión inmediatamente después de la actualización. Si no está en tu PATH actual, puedes usar la ruta completa: `~/.local/bin/godev version` para verificar la nueva versión.
+
+### Verificación del PATH
+
+El script de instalación verifica automáticamente si `~/.local/bin` está en tu PATH de varias maneras:
+
+1. **PATH actual de la sesión**: Verifica si está disponible en la sesión actual
+2. **Archivo ~/.zshrc**: Busca si está configurado en tu archivo de configuración de ZSH
+3. **Otros archivos de configuración**: Revisa `~/.zshenv`, `~/.zprofile`, y `~/.profile`
+
+Si el directorio no está en el PATH, el script te ofrece:
+
+- **Agregar automáticamente**: Opción para agregar la línea al `~/.zshrc` automáticamente
+- **Comandos manuales**: Instrucciones claras para agregarlo manualmente si prefieres
+
+**Comandos para agregar al PATH manualmente**:
+
+```bash
+# Opción 1: Agregar a ~/.zshrc (recomendado, permanente)
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+
+# Opción 2: Solo para la sesión actual (temporal)
+export PATH="$HOME/.local/bin:$PATH"
+```
+
 ### Solución de Problemas
 
 #### Error: "godev script not found"

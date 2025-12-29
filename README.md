@@ -24,6 +24,16 @@
 curl -fsSL https://raw.githubusercontent.com/augustose/godev/main/install.sh | zsh
 ```
 
+### Update godev
+
+To update to the latest version, simply run the install command again:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/augustose/godev/main/install.sh | zsh
+```
+
+The installer will detect the existing installation and prompt you to update it.
+
 ### Manual Install
 
 ```bash
