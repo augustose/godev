@@ -1,0 +1,51 @@
+# godev - .gitignore
+# Files to exclude from public repository
+
+# Personal files and local configuration
+.DS_Store
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+*.log
+
+# Configuration files with personal paths
+config.local.sh
+.env
+.env.local
+*.local
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# System files
+Thumbs.db
+.DS_Store
+
+# Test files (if they contain sensitive data)
+test-data/
+*.test.local
+
+# Build files (if any)
+dist/
+build/
+*.o
+*.so
+
+# Cache files
+.cache/
+*.cache
+
+# Old scripts (will be replaced by unified script)
+# Keep for now during migration
+# godev.sh
+# govap.sh
+
