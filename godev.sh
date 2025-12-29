@@ -68,10 +68,21 @@ _godev_func() {
     fi
     
     # Buscar directorios que coincidan con el patrón
+    # Excluir: node_modules, .git, dist, build, vendor, .next, etc.
     local matches=()
     while IFS= read -r -d '' dir; do
         matches+=("$dir")
-    done < <(find "$DEV_BASE" -maxdepth 3 -type d -iname "*${pattern}*" -print0 2>/dev/null)
+    done < <(find "$DEV_BASE" -maxdepth 3 -type d \
+        -not -path "*/node_modules/*" \
+        -not -path "*/.git/*" \
+        -not -path "*/dist/*" \
+        -not -path "*/build/*" \
+        -not -path "*/vendor/*" \
+        -not -path "*/.next/*" \
+        -not -path "*/target/*" \
+        -not -path "*/__pycache__/*" \
+        -not -path "*/.venv/*" \
+        -iname "*${pattern}*" -print0 2>/dev/null)
     
     local count=${#matches[@]}
     
