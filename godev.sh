@@ -1,166 +1,87 @@
-#!/bin/bash
+#!/bin/zsh
 
-godev_function() {
-    # --- CONFIGURACIÓN ---
-    local BASE_DIR="$HOME/DEV"
-    local TREE_LEVEL=2
-    local FORCE_CREATE=0
-    local OPTIND
+# godev - Navegar a directorios de proyectos de desarrollo
+# Uso: godev <patrón> [-f]
 
-    show_help() {
-        echo "godev - Navegador inteligente de proyectos"
-        echo ""
-        echo "Uso: godev [OPCIONES] <patrón>"
-        echo ""
-        echo "Busca proyectos en $BASE_DIR que coincidan con <patrón>."
-        echo ""
-        echo "Comportamiento:"
-        echo "  • 1 coincidencia  → Navega automáticamente"
-        echo "  • Varias          → Lista las opciones encontradas"
-        echo "  • 0 coincidencias → Sugiere crear con -f"
-        echo ""
-        echo "Opciones:"
-        echo "  -f           Crear directorio si no existe."
-        echo "  -l [nivel]   Nivel de tree (default: 2)."
-        echo "  -h           Mostrar esta ayuda."
-    }
+# Directorio base de proyectos (ajusta según tu configuración)
+DEV_BASE="${HOME}/DEV"
 
-    # Sin argumentos → Ayuda
-    if [ $# -eq 0 ]; then
-        show_help
-        return 0
+# Verificar que el directorio base existe
+if [[ ! -d "$DEV_BASE" ]]; then
+    echo "Error: El directorio base $DEV_BASE no existe"
+    return 1
+fi
+
+# Desactivar el alias temporalmente si existe
+if alias godev &>/dev/null; then
+    unalias godev
+fi
+
+# Función principal
+_godev_func() {
+    local pattern="$1"
+    local force_create=false
+    
+    # Verificar si se pasó el flag -f
+    if [[ "$2" == "-f" ]] || [[ "$1" == "-f" && -n "$2" ]]; then
+        force_create=true
+        [[ "$1" == "-f" ]] && pattern="$2"
     fi
-
-    # --- Procesar opciones ---
-    while getopts ":fl:h" opt; do
-      case $opt in
-        f)
-          FORCE_CREATE=1
-          ;;
-        l)
-          if [[ "$OPTARG" =~ ^[0-9]+$ ]]; then
-              TREE_LEVEL="$OPTARG"
-          else
-              TREE_LEVEL=2
-              OPTIND=$((OPTIND - 1))
-          fi
-          ;;
-        h)
-          show_help
-          return 0
-          ;;
-        :) 
-          if [ "$OPTARG" = "l" ]; then
-              TREE_LEVEL=2
-          else
-              echo "❌ Error: -${OPTARG} requiere un valor." >&2
-              return 1
-          fi
-          ;;
-        \?)
-          echo "❌ Error: Opción inválida -${OPTARG}." >&2
-          return 1
-          ;;
-      esac
-    done
-
-    shift $((OPTIND-1))
-    local PATTERN="$1"
-
-    if [ -z "$PATTERN" ]; then
-        echo "❌ Error: Faltó especificar el patrón de búsqueda."
+    
+    # Verificar que se proporcionó un patrón
+    if [[ -z "$pattern" ]]; then
+        echo "Uso: godev <patrón> [-f]"
+        echo "  -f: Forzar creación del directorio si no existe"
         return 1
     fi
-
-    # --- Verificar que exista el directorio base ---
-    if [ ! -d "$BASE_DIR" ]; then
-        echo "❌ Error: No existe el directorio base '$BASE_DIR'."
-        echo "Créalo primero con: mkdir -p $BASE_DIR"
-        return 1
-    fi
-
-    # --- BÚSQUEDA DE PROYECTOS ---
-    # Buscar directorios que contengan el patrón (búsqueda recursiva 1 nivel)
-    local all_matches=()
-    while IFS= read -r -d '' dir; do
-        all_matches+=("$dir")
-    done < <(find "$BASE_DIR" -maxdepth 2 -type d -iname "*${PATTERN}*" -print0 2>/dev/null)
-
-    # Filtrar resultados: excluir BASE_DIR y cualquier directorio llamado "godev"
+    
+    # Buscar directorios que coincidan con el patrón
     local matches=()
-    for dir in "${all_matches[@]}"; do
-        local dir_name=$(basename "$dir")
-        # Excluir el BASE_DIR mismo y directorios que se llamen "godev"
-        if [ "$dir" != "$BASE_DIR" ] && [ "$dir_name" != "godev" ]; then
-            matches+=("$dir")
-        fi
-    done
-
+    while IFS= read -r -d '' dir; do
+        matches+=("$dir")
+    done < <(find "$DEV_BASE" -maxdepth 3 -type d -iname "*${pattern}*" -print0 2>/dev/null)
+    
     local count=${#matches[@]}
-
-    # --- CASO 1: No hay coincidencias ---
-    if [ $count -eq 0 ]; then
-        if [ "$FORCE_CREATE" -eq 1 ]; then
-            local NEW_PROJECT="$BASE_DIR/$PATTERN"
-            echo "✨ Creando nuevo proyecto: $NEW_PROJECT"
-            mkdir -p "$NEW_PROJECT"
-            cd "$NEW_PROJECT" || return 1
-            
-            echo "🚀 Proyecto: $PATTERN"
-            echo "📂 Ruta:     $NEW_PROJECT"
-            echo "---------------------------------"
-            
-            if command -v tree &> /dev/null; then
-                tree -L "$TREE_LEVEL" | grep -i "$PATTERN"
-            else
-                ls -la | grep -i "$PATTERN"
-            fi
+    
+    if [[ $count -eq 0 ]]; then
+        # No se encontraron coincidencias
+        if [[ "$force_create" == true ]]; then
+            local new_dir="${DEV_BASE}/${pattern}"
+            mkdir -p "$new_dir"
+            echo "✓ Directorio creado: $new_dir"
+            cd "$new_dir"
         else
-            echo "❌ No se encontró ningún proyecto que coincida con: '$PATTERN'"
-            echo ""
-            echo "Usa 'godev -f $PATTERN' para crear un nuevo proyecto."
+            echo "No se encontró ningún directorio con el patrón: $pattern"
+            echo "Usa 'godev $pattern -f' para crear el directorio"
             return 1
         fi
-        return 0
-    fi
-
-    # --- CASO 2: Una sola coincidencia ---
-    if [ $count -eq 1 ]; then
-        local TARGET="${matches[0]}"
-        cd "$TARGET" || return 1
+    elif [[ $count -eq 1 ]]; then
+        # Una sola coincidencia - cambiar al directorio
+        cd "${matches[1]}"
+        echo "→ ${matches[1]}"
+    else
+        # Múltiples coincidencias - mostrar lista
+        echo "Se encontraron $count directorios:"
+        echo ""
+        local i=1
+        for dir in "${matches[@]}"; do
+            echo "  [$i] ${dir#$DEV_BASE/}"
+            ((i++))
+        done
+        echo ""
+        echo -n "Selecciona un número (1-$count) o presiona Enter para cancelar: "
+        read selection
         
-        local PROJECT_NAME=$(basename "$TARGET")
-        echo "🚀 Proyecto: $PROJECT_NAME"
-        echo "📂 Ruta:     $TARGET"
-        echo "---------------------------------"
-        
-        if command -v tree &> /dev/null; then
-            tree -L "$TREE_LEVEL" | grep -i "$PATTERN"
+        if [[ "$selection" =~ ^[0-9]+$ ]] && [[ "$selection" -ge 1 ]] && [[ "$selection" -le $count ]]; then
+            cd "${matches[$selection]}"
+            echo "→ ${matches[$selection]}"
         else
-            ls -la | grep -i "$PATTERN"
+            echo "Cancelado"
+            return 1
         fi
-        return 0
     fi
-
-    # --- CASO 3: Múltiples coincidencias ---
-    echo "🔍 Se encontraron $count proyectos que coinciden con '$PATTERN':"
-    echo ""
-    for ((i=0; i<count; i++)); do
-        local dir_name=$(basename "${matches[$i]}")
-        local parent_dir=$(dirname "${matches[$i]}")
-        local parent_name=$(basename "$parent_dir")
-        
-        # Mostrar jerarquía si está en subcarpeta
-        if [ "$parent_dir" != "$BASE_DIR" ]; then
-            echo "  $((i+1)). $parent_name/$dir_name"
-        else
-            echo "  $((i+1)). $dir_name"
-        fi
-    done
-    echo ""
-    echo "💡 Refina tu búsqueda con un patrón más específico."
-    return 0
 }
 
-godev_function "$@"
-unset -f godev_function
+# Ejecutar la función
+_godev_func "$@"
+echo "godev version 1.0"
