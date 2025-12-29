@@ -292,9 +292,394 @@ nav_command() {
     fi
 }
 
+# Status command (migrated from govap.sh)
 status_command() {
-    echo -e "${YELLOW}Command 'status' is being implemented...${NC}"
-    echo "This will show project activity status."
+    local SHOW_ALL=false
+    local SORT_MODE="date"
+    local FILTER_DAYS=""
+    local status_dev_base="$DEV_BASE"
+    
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -d|--dir)
+                status_dev_base="$2"
+                shift 2
+                ;;
+            -s|--sort)
+                SORT_MODE="$2"
+                shift 2
+                ;;
+            -f|--filter)
+                FILTER_DAYS="$2"
+                shift 2
+                ;;
+            -a|--all)
+                SHOW_ALL=true
+                shift
+                ;;
+            -h|--help)
+                echo "godev status - Show project activity status"
+                echo ""
+                echo "Usage: godev status [options]"
+                echo ""
+                echo "Options:"
+                echo "  -d, --dir <path>      Base directory to scan (default: ~/DEV)"
+                echo "  -s, --sort <mode>     Sort mode: date|name|activity (default: date)"
+                echo "  -f, --filter <days>   Show only projects active in last N days"
+                echo "  -a, --all             Show all projects, including non-Git directories"
+                echo "  -h, --help            Show this help"
+                return 0
+                ;;
+            *)
+                echo -e "${RED}Unknown option: $1${NC}" >&2
+                echo "Use 'godev status -h' for help"
+                return 1
+                ;;
+        esac
+    done
+    
+    # Verify that the base directory exists
+    if [[ ! -d "$status_dev_base" ]]; then
+        echo -e "${RED}Error: Base directory $status_dev_base does not exist${NC}" >&2
+        return 1
+    fi
+    
+    echo -e "${WHITE}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${WHITE}  🔍 Project Activity Status${NC}"
+    echo -e "${WHITE}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${GRAY}Scanning: ${status_dev_base}${NC}"
+    echo ""
+    
+    # Collect project information
+    local projects=()
+    local project_count=0
+    local git_count=0
+    
+    # Find all directories containing .git recursively
+    local find_args=("$status_dev_base")
+    if [[ $MAX_DEPTH -gt 0 ]]; then
+        find_args+=("-maxdepth" "$MAX_DEPTH")
+    fi
+    find_args+=(
+        "-type" "d" "-name" ".git"
+        "-not" "-path" "*/node_modules/*"
+        "-not" "-path" "*/dist/*"
+        "-not" "-path" "*/build/*"
+        "-not" "-path" "*/vendor/*"
+        "-not" "-path" "*/.next/*"
+        "-not" "-path" "*/target/*"
+        "-not" "-path" "*/__pycache__/*"
+        "-not" "-path" "*/.venv/*"
+        "-print"
+    )
+    
+    while IFS= read -r git_dir; do
+        local dir=$(dirname "$git_dir")
+        if [[ -d "$dir" ]]; then
+            local info=$(get_project_info "$dir" "$status_dev_base" "$SHOW_ALL")
+            if [[ -n "$info" ]]; then
+                projects+=("$info")
+                ((project_count++))
+                if [[ "$info" != *"NO_GIT"* ]]; then
+                    ((git_count++))
+                fi
+            fi
+        fi
+    done < <(find "${find_args[@]}" 2>/dev/null)
+    
+    # If SHOW_ALL is true, also include non-Git directories at first level
+    if [[ "$SHOW_ALL" == true ]]; then
+        for dir in "$status_dev_base"/*/; do
+            if [[ -d "$dir" ]] && [[ ! -d "$dir/.git" ]]; then
+                local info=$(get_project_info "$dir" "$status_dev_base" "$SHOW_ALL")
+                if [[ -n "$info" ]] && [[ "$info" == *"NO_GIT"* ]]; then
+                    projects+=("$info")
+                    ((project_count++))
+                fi
+            fi
+        done
+    fi
+    
+    if [[ $project_count -eq 0 ]]; then
+        echo -e "${YELLOW}No projects found in $status_dev_base${NC}"
+        return 0
+    fi
+    
+    # Filter by days if specified
+    if [[ -n "$FILTER_DAYS" ]]; then
+        local filtered=()
+        for project in "${projects[@]}"; do
+            local fields=("${(@s:|:)project}")
+            local timestamp="${fields[4]}"
+            local days=$(days_since_commit "$timestamp")
+            if [[ $days -le $FILTER_DAYS ]]; then
+                filtered+=("$project")
+            fi
+        done
+        projects=("${filtered[@]}")
+    fi
+    
+    # Sort projects
+    case "$SORT_MODE" in
+        name)
+            local sorted=()
+            while IFS= read -r line; do
+                sorted+=("$line")
+            done < <(printf '%s\n' "${projects[@]}" | sort -t'|' -k1)
+            projects=("${sorted[@]}")
+            ;;
+        activity)
+            local sorted=()
+            while IFS= read -r line; do
+                sorted+=("$line")
+            done < <(printf '%s\n' "${projects[@]}" | sort -t'|' -k7 -rn)
+            projects=("${sorted[@]}")
+            ;;
+        date|*)
+            local sorted=()
+            while IFS= read -r line; do
+                sorted+=("$line")
+            done < <(printf '%s\n' "${projects[@]}" | sort -t'|' -k4 -rn)
+            projects=("${sorted[@]}")
+            ;;
+    esac
+    
+    # Display results
+    local active_count=0
+    local modified_count=0
+    local ahead_count=0
+    local behind_count=0
+    
+    printf "%-30s %-20s %-15s %-12s %s\n" \
+        "PROJECT" "LAST COMMIT" "BRANCH" "STATUS" "ACTIVITY (30d)"
+    echo -e "${GRAY}$(printf '%.0s─' {1..100})${NC}"
+    
+    for project in "${projects[@]}"; do
+        local fields=("${(@s:|:)project}")
+        local name="${fields[1]}"
+        local rel="${fields[2]}"
+        local abs="${fields[3]}"
+        local timestamp="${fields[4]}"
+        local branch="${fields[5]}"
+        local repo_status="${fields[6]}"
+        local commits="${fields[7]}"
+        local total="${fields[8]}"
+        
+        # Skip if no git and not showing all
+        if [[ "$repo_status" == "NO_GIT" ]] && [[ "$SHOW_ALL" != true ]]; then
+            continue
+        fi
+        
+        # Truncate long names
+        local display_name="$name"
+        if [[ ${#display_name} -gt 28 ]]; then
+            display_name="${display_name:0:25}..."
+        fi
+        
+        # Format branch
+        local display_branch="$branch"
+        if [[ ${#display_branch} -gt 13 ]]; then
+            display_branch="${display_branch:0:10}..."
+        fi
+        
+        # Format relative date
+        local display_date="$rel"
+        if [[ ${#display_date} -gt 18 ]]; then
+            display_date="${display_date:0:15}..."
+        fi
+        
+        # Status icon and color
+        local status_display=$(format_status "$repo_status")
+        
+        # Activity indicator
+        local activity_display=""
+        if [[ "$commits" != "N/A" ]] && [[ "$commits" != "" ]] && [[ "$commits" =~ ^[0-9]+$ ]]; then
+            if [[ $commits -gt 10 ]]; then
+                activity_display="${GREEN}●●●${NC} ($commits)"
+            elif [[ $commits -gt 5 ]]; then
+                activity_display="${YELLOW}●●○${NC} ($commits)"
+            elif [[ $commits -gt 0 ]]; then
+                activity_display="${GRAY}●○○${NC} ($commits)"
+            else
+                activity_display="${GRAY}○○○${NC} (0)"
+            fi
+        else
+            activity_display="${GRAY}○○○${NC}"
+        fi
+        
+        # Calculate real widths (without ANSI codes) for proper alignment
+        local status_plain=$(strip_ansi "$status_display")
+        
+        local name_width=${#display_name}
+        local date_width=${#display_date}
+        local branch_width=${#display_branch}
+        local status_width=${#status_plain}
+        
+        # Column widths match the header: 30, 20, 15, 12
+        local name_pad=$((30 - name_width))
+        local date_pad=$((20 - date_width))
+        local branch_pad=$((15 - branch_width))
+        local status_pad=$((12 - status_width))
+        
+        # Build the output line with proper padding
+        local output_line=""
+        output_line+="$(printf '%-30s' "$display_name")"
+        output_line+="$(printf '%-20s' "$display_date")"
+        output_line+="$(printf '%-15s' "$display_branch")"
+        output_line+="$status_display"
+        if [[ $status_pad -gt 0 ]]; then
+            output_line+="$(printf '%*s' $status_pad '')"
+        fi
+        output_line+=" $activity_display"
+        
+        # Print with echo -e to interpret ANSI codes
+        echo -e "$output_line"
+        
+        # Count statistics
+        case "$repo_status" in
+            clean|ahead|behind|diverged)
+                ((active_count++))
+                ;;
+            modified)
+                ((modified_count++))
+                ((active_count++))
+                ;;
+        esac
+        
+        if [[ "$repo_status" == "ahead" ]] || [[ "$repo_status" == "diverged" ]]; then
+            ((ahead_count++))
+        fi
+        if [[ "$repo_status" == "behind" ]] || [[ "$repo_status" == "diverged" ]]; then
+            ((behind_count++))
+        fi
+    done
+    
+    echo ""
+    echo -e "${WHITE}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${GRAY}Summary:${NC}"
+    echo -e "  Total projects: ${WHITE}$project_count${NC}"
+    echo -e "  Git repositories: ${WHITE}$git_count${NC}"
+    echo -e "  Active repos: ${GREEN}$active_count${NC}"
+    if [[ $modified_count -gt 0 ]]; then
+        echo -e "  Modified: ${YELLOW}$modified_count${NC}"
+    fi
+    if [[ $ahead_count -gt 0 ]]; then
+        echo -e "  Ahead of remote: ${YELLOW}$ahead_count${NC}"
+    fi
+    if [[ $behind_count -gt 0 ]]; then
+        echo -e "  Behind remote: ${BLUE}$behind_count${NC}"
+    fi
+    echo -e "${WHITE}═══════════════════════════════════════════════════════════════${NC}"
+}
+
+# Helper functions for status command
+get_project_info() {
+    local dir="$1"
+    local dev_base="${2:-$DEV_BASE}"
+    local show_all="${3:-false}"
+    # Remove trailing slash and get relative path from DEV_BASE
+    local dir_clean="${dir%/}"
+    # Get relative path from DEV_BASE to show nested structure
+    local dev_base_clean="${dev_base%/}"
+    local project_name="${dir_clean#$dev_base_clean/}"
+    # If project_name is empty or same as dir, fallback to directory name
+    if [[ -z "$project_name" ]] || [[ "$project_name" == "$dir_clean" ]]; then
+        project_name="${dir_clean##*/}"
+    fi
+    
+    if [[ ! -d "$dir/.git" ]]; then
+        if [[ "$show_all" == true ]]; then
+            echo "$project_name|NO_GIT|N/A|N/A|N/A|N/A|N/A|N/A"
+        fi
+        return
+    fi
+    
+    pushd "$dir" > /dev/null 2>&1 || return
+    
+    # Get last commit date (relative and absolute)
+    local last_commit_relative=""
+    local last_commit_absolute=""
+    local last_commit_timestamp=""
+    
+    if git rev-parse --git-dir > /dev/null 2>&1; then
+        last_commit_relative=$(git log -1 --format="%ar" 2>/dev/null)
+        last_commit_absolute=$(git log -1 --format="%ci" 2>/dev/null)
+        last_commit_timestamp=$(git log -1 --format="%ct" 2>/dev/null)
+        
+        # Get current branch
+        local branch=$(git branch --show-current 2>/dev/null || echo "detached")
+        
+        # Get repository status
+        local repo_status=""
+        local git_status=$(git status --porcelain 2>/dev/null)
+        local ahead=$(git status -sb 2>/dev/null | grep -o 'ahead [0-9]*' | grep -o '[0-9]*')
+        local behind=$(git status -sb 2>/dev/null | grep -o 'behind [0-9]*' | grep -o '[0-9]*')
+        
+        if [[ -n "$git_status" ]]; then
+            repo_status="modified"
+        elif [[ -n "$ahead" ]] && [[ -n "$behind" ]]; then
+            repo_status="diverged"
+        elif [[ -n "$ahead" ]]; then
+            repo_status="ahead"
+        elif [[ -n "$behind" ]]; then
+            repo_status="behind"
+        else
+            repo_status="clean"
+        fi
+        
+        # Get commit count (last 30 days)
+        local commit_count=$(git log --since="30 days ago" --oneline 2>/dev/null | wc -l | tr -d ' ')
+        
+        # Get total commits
+        local total_commits=$(git rev-list --count HEAD 2>/dev/null || echo "0")
+        
+        echo "$project_name|$last_commit_relative|$last_commit_absolute|$last_commit_timestamp|$branch|$repo_status|$commit_count|$total_commits"
+    fi
+    
+    popd > /dev/null 2>&1
+}
+
+days_since_commit() {
+    local timestamp="$1"
+    if [[ -z "$timestamp" ]] || [[ "$timestamp" == "N/A" ]]; then
+        echo "999999"
+        return
+    fi
+    local now=$(date +%s)
+    local diff=$((now - timestamp))
+    echo $((diff / 86400))
+}
+
+strip_ansi() {
+    echo "$1" | sed 's/\x1b\[[0-9;]*m//g'
+}
+
+format_status() {
+    local repo_status="$1"
+    case "$repo_status" in
+        clean)
+            echo -e "${GREEN}✓ clean${NC}"
+            ;;
+        modified)
+            echo -e "${RED}● modified${NC}"
+            ;;
+        ahead)
+            echo -e "${YELLOW}↑ ahead${NC}"
+            ;;
+        behind)
+            echo -e "${BLUE}↓ behind${NC}"
+            ;;
+        diverged)
+            echo -e "${MAGENTA}↕ diverged${NC}"
+            ;;
+        NO_GIT)
+            echo -e "${GRAY}○ no git${NC}"
+            ;;
+        *)
+            echo -e "${GRAY}$repo_status${NC}"
+            ;;
+    esac
 }
 
 list_command() {
