@@ -4,6 +4,73 @@ Este documento describe los scripts de la suite godev y cómo utilizarlos.
 
 ---
 
+## install.sh - Script de Instalación
+
+### Descripción
+Script de instalación que permite instalar `godev` en cualquier sistema mediante una descarga directa desde GitHub o desde un repositorio local.
+
+### Características Principales
+
+1. **Instalación Remota**
+   - Descarga automática del script `godev` desde GitHub cuando se ejecuta vía curl
+   - Detección automática del método de ejecución (piped curl vs. archivo local)
+   - Limpieza automática de archivos temporales
+
+2. **Instalación Local**
+   - Soporte para instalación desde un repositorio clonado localmente
+   - Usa el script `godev` del mismo directorio cuando está disponible
+
+3. **Configuración Automática**
+   - Crea el directorio de instalación si no existe (`~/.local/bin`)
+   - Opción para agregar automáticamente al PATH en `~/.zshrc`
+   - Verificación de instalación exitosa
+
+### Instalación
+
+#### Instalación Remota (Recomendada)
+```bash
+curl -fsSL https://raw.githubusercontent.com/augustose/godev/main/install.sh | zsh
+```
+
+#### Instalación Local
+```bash
+# 1. Clonar el repositorio
+git clone https://github.com/augustose/godev.git
+cd godev
+
+# 2. Ejecutar el script de instalación
+zsh install.sh
+```
+
+### Funcionamiento
+
+El script detecta automáticamente cómo está siendo ejecutado:
+
+- **Piped curl**: Cuando se ejecuta mediante `curl ... | zsh`, el script descarga el archivo `godev` desde GitHub y lo instala en `~/.local/bin`
+- **Archivo local**: Cuando se ejecuta desde un repositorio clonado, usa el archivo `godev` del mismo directorio
+
+### Solución de Problemas
+
+#### Error: "godev script not found"
+Este error puede ocurrir cuando:
+- El script se ejecuta desde un directorio que no contiene el archivo `godev`
+- Hay problemas de conectividad al descargar desde GitHub
+
+**Solución**: Asegúrate de tener conexión a internet cuando uses la instalación remota, o clona el repositorio y ejecuta el script localmente.
+
+#### Error: "Failed to download godev script from GitHub"
+- Verifica tu conexión a internet
+- Verifica que la URL del repositorio sea correcta
+- Intenta la instalación local como alternativa
+
+### Requisitos
+
+- **ZSH**: El script requiere ZSH para ejecutarse
+- **curl**: Necesario para la instalación remota (generalmente preinstalado en macOS/Linux)
+- **Permisos de escritura**: En `~/.local/bin` y opcionalmente en `~/.zshrc`
+
+---
+
 ## govap.sh - Verificador Avanzado de Actividad de Proyectos
 
 ### Descripción
@@ -252,18 +319,155 @@ DEV_BASE="${HOME}/DEV"  # Cambiar a tu directorio preferido
 
 ---
 
-## godev.sh - Navegador Inteligente de Proyectos
+## godev - Navegador Inteligente de Proyectos (Unificado)
 
 ### Descripción
-Script que permite navegar rápidamente a proyectos de desarrollo buscando por patrón de nombre.
+Script unificado que permite navegar rápidamente a proyectos de desarrollo buscando por patrón de nombre. Combina las funcionalidades de navegación y monitoreo de estado en un solo comando.
 
-### Uso
+### Características Principales
+
+1. **Navegación Rápida**
+   - Búsqueda por patrón de nombre
+   - Selección interactiva con fzf (si está disponible)
+   - Fallback a lista numerada si fzf no está disponible
+   - Soporte para múltiples coincidencias
+
+2. **Integración con fzf**
+   - Usa fzf para selección interactiva cuando hay múltiples coincidencias
+   - Validación automática de disponibilidad de fzf
+   - Validación de permisos de escritura en directorio temporal
+   - Opción para deshabilitar fzf mediante variable de entorno
+
+### Uso Básico
+
 ```bash
-source godev.sh <pattern>
-source godev.sh -f <name>  # Forzar creación
+# Navegar a un proyecto (comando por defecto)
+godev nav react
+godev react              # Mismo comando (nav es por defecto)
+
+# Forzar creación de directorio (cuando no está en modo readonly)
+godev nav new-project -f
 ```
 
-Ver `godev.md` para más detalles.
+### Opciones de Navegación
+
+| Opción | Descripción |
+|--------|-------------|
+| `<pattern>` | Patrón de búsqueda para el nombre del proyecto |
+| `-f, --force` | Forzar creación de directorio (deshabilitado en modo readonly) |
+| `-h, --help` | Mostrar ayuda del comando nav |
+
+### Integración con fzf
+
+#### Comportamiento Automático
+
+El script detecta automáticamente:
+- **Disponibilidad de fzf**: Verifica si el comando `fzf` está disponible en el PATH
+- **Permisos de escritura**: Valida que se pueda escribir en el directorio temporal (`$TMPDIR` o `/tmp`)
+
+Si alguna de estas validaciones falla, el script automáticamente usa el modo de lista numerada como fallback.
+
+#### Deshabilitar fzf para Pruebas
+
+Para probar la funcionalidad sin fzf, puedes usar la variable de entorno `GODEV_NO_FZF`:
+
+```bash
+# Deshabilitar fzf y usar lista numerada
+GODEV_NO_FZF=1 godev nav react
+
+# O exportar para toda la sesión
+export GODEV_NO_FZF=1
+godev nav react
+```
+
+**Nota**: Esta opción es útil para:
+- Probar la funcionalidad de fallback
+- Entornos donde fzf no está disponible
+- Debugging de problemas relacionados con fzf
+
+#### Validaciones Realizadas
+
+El script realiza las siguientes validaciones antes de usar fzf:
+
+1. **Disponibilidad de fzf**
+   ```bash
+   command -v fzf >/dev/null 2>&1
+   ```
+
+2. **Permisos de escritura en directorio temporal**
+   ```bash
+   [[ -w "${TMPDIR:-/tmp}" ]]
+   ```
+
+Si alguna validación falla, se muestra un mensaje informativo y se usa el modo de lista numerada.
+
+### Modo de Lista Numerada (Fallback)
+
+Cuando fzf no está disponible o está deshabilitado, el script muestra una lista numerada:
+
+```
+Found 5 directories:
+
+  [1] company/react-app
+  [2] personal/react-tutorial
+  [3] tests/react-test
+  [4] legacy/react-old
+  [5] sandbox/react-playground
+
+Select a number (1-5) or press Enter to cancel:
+```
+
+### Solución de Problemas
+
+#### fzf no se usa aunque esté instalado
+
+1. Verifica que fzf esté en el PATH:
+   ```bash
+   which fzf
+   command -v fzf
+   ```
+
+2. Verifica permisos de escritura en directorio temporal:
+   ```bash
+   test -w "${TMPDIR:-/tmp}" && echo "OK" || echo "No write access"
+   ```
+
+3. Verifica si la variable `GODEV_NO_FZF` está establecida:
+   ```bash
+   echo "${GODEV_NO_FZF:-not set}"
+   ```
+
+#### Error: "Cannot write to temporary directory"
+
+- Verifica permisos del directorio temporal
+- El script continuará funcionando usando el modo de lista numerada
+- Los archivos temporales para el wrapper de función pueden no crearse
+
+### Ejemplos de Uso
+
+#### Ejemplo 1: Navegación Simple
+```bash
+godev nav api
+```
+Si hay una sola coincidencia, muestra el directorio directamente.
+
+#### Ejemplo 2: Selección Interactiva
+```bash
+godev nav react
+```
+Si hay múltiples coincidencias, muestra menú interactivo (fzf o lista numerada).
+
+#### Ejemplo 3: Probar sin fzf
+```bash
+GODEV_NO_FZF=1 godev nav react
+```
+Fuerza el uso de lista numerada incluso si fzf está disponible.
+
+#### Ejemplo 4: Crear Nuevo Proyecto
+```bash
+godev nav new-project -f
+```
+Crea un nuevo directorio (solo si no está en modo readonly).
 
 ---
 

@@ -6,6 +6,14 @@
 
 set -e
 
+# Cleanup function for temp directory
+cleanup() {
+    if [[ -n "$TEMP_DIR" ]] && [[ -d "$TEMP_DIR" ]]; then
+        rm -rf "$TEMP_DIR"
+    fi
+}
+trap cleanup EXIT
+
 # Colors
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -29,14 +37,36 @@ if [[ -z "$ZSH_VERSION" ]]; then
     exit 1
 fi
 
-# Get script directory
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-GODEV_SCRIPT="$SCRIPT_DIR/godev"
+# GitHub repository URL
+GITHUB_REPO="https://raw.githubusercontent.com/augustose/godev/main"
 
-# Check if godev script exists
-if [[ ! -f "$GODEV_SCRIPT" ]]; then
-    echo -e "${RED}Error: godev script not found at $GODEV_SCRIPT${NC}"
-    exit 1
+# Initialize TEMP_DIR variable for cleanup
+TEMP_DIR=""
+
+# Determine if we're running from a piped curl command or local file
+# When piped, $0 is usually "-zsh" or similar, not a file path
+if [[ "$0" == -* ]] || [[ ! -f "$0" ]]; then
+    # Running from piped curl - download godev script from GitHub
+    echo -e "${BLUE}Downloading godev script from GitHub...${NC}"
+    TEMP_DIR=$(mktemp -d)
+    GODEV_SCRIPT="$TEMP_DIR/godev"
+    
+    if ! curl -fsSL "$GITHUB_REPO/godev" -o "$GODEV_SCRIPT"; then
+        echo -e "${RED}Error: Failed to download godev script from GitHub${NC}"
+        exit 1
+    fi
+    
+    chmod +x "$GODEV_SCRIPT"
+else
+    # Running from local file - use local godev script
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+    GODEV_SCRIPT="$SCRIPT_DIR/godev"
+    
+    # Check if godev script exists locally
+    if [[ ! -f "$GODEV_SCRIPT" ]]; then
+        echo -e "${RED}Error: godev script not found at $GODEV_SCRIPT${NC}"
+        exit 1
+    fi
 fi
 
 # Create install directory if it doesn't exist
