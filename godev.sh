@@ -1,10 +1,47 @@
 #!/bin/zsh
+#
+# Copyright 2024 Augusto Sosa Escalada
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# -----------------------------------------------------------------------------
+# godev - Intelligent Project Navigator
+#
+# DESCRIPTION
+#   Fast navigation to development projects. Searches for directories matching
+#   a pattern within your DEV_BASE folder. Handles single matches (auto-cd),
+#   multiple matches (interactive menu), and no matches (create option).
+#
+# INSTALLATION
+#   1. Save this script to a folder (e.g., ~/bin/godev)
+#   2. Make it executable: chmod +x ~/bin/godev
+#   3. Add this alias to your ~/.zshrc or ~/.bashrc to source it:
+#      alias godev="source ~/bin/godev"
+#      (Sourcing is required to change the current shell directory)
+#
+# USAGE
+#   godev <pattern>      Search for project matching pattern
+#   godev -f <name>      Force creation of a new project directory
+#   godev -v             Show version
+#   godev -h             Show help
+#
+# EXAMPLES
+#   godev react          # Jumps to ~/DEV/react-project if unique
+#   godev api            # Shows menu if multiple 'api' projects exist
+#   godev -f new-app     # Creates ~/DEV/new-app and cd into it
+# -----------------------------------------------------------------------------
 
-# godev - Navigate to development project directories
-# Usage: godev <pattern> [-f] [-v]
-# Version: 1.1.0
-
-VERSION="1.0.0"
+VERSION="1.1.0"
 
 # Base projects directory (adjust according to your configuration)
 DEV_BASE="${HOME}/DEV"
