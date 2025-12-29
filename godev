@@ -43,7 +43,7 @@
 # -----------------------------------------------------------------------------
 
 VERSION="2.0.0"
-BUILD="45"  # Auto-incremented on each commit
+BUILD="47"  # Auto-incremented on each commit
 
 # Detect if output is to a terminal
 if [[ -t 1 ]]; then
@@ -120,18 +120,6 @@ show_help() {
     echo -e "    2. Find: ${GREEN}READONLY_MODE=true${NC}"
     echo -e "    3. Change to: ${GREEN}READONLY_MODE=false${NC}"
     echo -e "    4. Save and restart your terminal"
-    echo ""
-    echo -e "${CYAN}FZF INTEGRATION:${NC}"
-    echo -e "    godev uses ${GREEN}fzf${NC} for interactive selection when multiple matches are found."
-    echo -e "    If ${GREEN}fzf${NC} is not available, a numbered list will be shown instead."
-    echo ""
-    echo -e "    ${GRAY}To disable fzf (for testing):${NC}"
-    echo -e "    ${GREEN}GODEV_NO_FZF=1 godev nav <pattern>${NC}"
-    echo ""
-    echo -e "    ${GRAY}Note:${NC} The script validates:"
-    echo -e "    - fzf availability (checks if command exists)"
-    echo -e "    - Temporary directory write permissions"
-    echo -e "    If either check fails, the numbered list fallback is used automatically."
 }
 
 # Main command dispatcher
@@ -140,14 +128,8 @@ main() {
     shift
     
     # If no command provided, default to nav (for backward compatibility)
-    if [[ -z "$command" ]]; then
-        # No command - show help
-        show_help
-        exit 0
-    fi
-    
-    # Check if it's a flag first
-    if [[ "$command" == -* ]]; then
+    if [[ -z "$command" ]] || [[ "$command" == -* ]]; then
+        # Check if it's a version or help flag
         case "$command" in
             -v|--version)
                 echo "godev version $VERSION+build.$BUILD"
@@ -158,23 +140,11 @@ main() {
                 exit 0
                 ;;
             *)
-                echo -e "${RED}Unknown option: $command${NC}" >&2
-                echo "Run 'godev help' for usage"
-                exit 1
+                # Default to nav command
+                nav_command "$command" "$@"
+                return
                 ;;
         esac
-    fi
-    
-    # If command is not a known command, treat as nav pattern
-    if [[ "$command" != "nav" ]] && [[ "$command" != "n" ]] && \
-       [[ "$command" != "status" ]] && [[ "$command" != "s" ]] && \
-       [[ "$command" != "list" ]] && [[ "$command" != "l" ]] && \
-       [[ "$command" != "ai-status" ]] && [[ "$command" != "ai" ]] && \
-       [[ "$command" != "help" ]] && [[ "$command" != "h" ]] && \
-       [[ "$command" != "version" ]] && [[ "$command" != "v" ]]; then
-        # Treat as nav pattern (default behavior)
-        nav_command "$command" "$@"
-        return
     fi
     
     case "$command" in
@@ -258,21 +228,13 @@ nav_command() {
     fi
     
     # Search for directories matching the pattern
-    # Exclude: node_modules, .git, .github, dist, build, vendor, .next, etc.
+    # Exclude: node_modules, .git, dist, build, vendor, .next, etc.
     local matches=()
     while IFS= read -r -d '' dir; do
-        # Additional filter: exclude directories that are .git, .github, or other config dirs
-        local dirname=$(basename "$dir")
-        if [[ "$dirname" == ".git" ]] || [[ "$dirname" == ".github" ]]; then
-            continue
-        fi
         matches+=("$dir")
     done < <(find "$DEV_BASE" -maxdepth 3 -type d \
         -not -path "*/node_modules/*" \
         -not -path "*/.git/*" \
-        -not -name ".git" \
-        -not -path "*/.github/*" \
-        -not -name ".github" \
         -not -path "*/dist/*" \
         -not -path "*/build/*" \
         -not -path "*/vendor/*" \
@@ -315,117 +277,45 @@ nav_command() {
         # Always output path in consistent format for function wrapper
         # Note: READONLY_MODE only prevents directory creation, not navigation
         echo "Path: $target_dir"
-        # Also write to temp file for function wrapper (works when output is captured)
-        # Only if we have write permissions to temp directory
-        local tmp_dir="${TMPDIR:-/tmp}"
-        if [[ -w "$tmp_dir" ]]; then
-            local path_file="${tmp_dir}/godev_selected_path_$$"
-            echo "$target_dir" > "$path_file" 2>/dev/null || true
-        fi
+        # Write to temp file for function wrapper to read
+        local path_file="${TMPDIR:-/tmp}/godev_selected_path_$$"
+        echo "$target_dir" > "$path_file"
         return 0
     else
-        # Multiple matches - use fzf if available, otherwise show numbered list
-        local target_dir=""
+        # Multiple matches - show list
+        # Check if we're being called from a function wrapper (stdout might be captured)
+        # If so, we need to write the prompt to stderr so it's visible
+        echo -e "${CYAN}Found $count directories:${NC}" >&2
+        echo "" >&2
+        local i=1
+        for dir in "${matches[@]}"; do
+            local rel_path="${dir#$DEV_BASE/}"
+            echo -e "  ${GREEN}[$i]${NC} ${rel_path}" >&2
+            ((i++))
+        done
+        echo "" >&2
         
-        # Check if fzf should be disabled via environment variable
-        local use_fzf=true
-        if [[ -n "${GODEV_NO_FZF:-}" ]]; then
-            use_fzf=false
-        fi
-        
-        # Validate temporary directory permissions
-        local tmp_dir="${TMPDIR:-/tmp}"
-        local can_write_tmp=false
-        if [[ -w "$tmp_dir" ]]; then
-            can_write_tmp=true
+        # Write prompt to stderr so it's visible even when output is captured
+        if [[ "$READONLY_MODE" == true ]]; then
+            echo -e "${GRAY}[READONLY MODE]${NC} Select a number (1-$count) to see path, or press Enter to cancel: " >&2
         else
-            echo -e "${YELLOW}Warning: Cannot write to temporary directory ($tmp_dir)${NC}" >&2
-            echo -e "${GRAY}Some features may be limited. Falling back to numbered list selection.${NC}" >&2
-            use_fzf=false
+            echo -n "Select a number (1-$count) or press Enter to cancel: " >&2
         fi
         
-        # Check if fzf is available and should be used
-        if [[ "$use_fzf" == true ]] && command -v fzf >/dev/null 2>&1; then
-            # Use fzf for interactive selection
-            local rel_paths=()
-            for dir in "${matches[@]}"; do
-                rel_paths+=("${dir#$DEV_BASE/}|$dir")
-            done
-            
-            # Use fzf to select, showing relative paths but returning full path
-            local selected=$(printf '%s\n' "${rel_paths[@]}" | \
-                sed 's/|.*$//' | \
-                fzf --height=40% --border --header="Select a directory (${count} matches):" \
-                    --preview="echo {}" --preview-window=down:1 2>/dev/tty)
-            
-            if [[ -n "$selected" ]]; then
-                # Find the full path for the selected relative path
-                for dir in "${matches[@]}"; do
-                    local rel_path="${dir#$DEV_BASE/}"
-                    if [[ "$rel_path" == "$selected" ]]; then
-                        target_dir="$dir"
-                        break
-                    fi
-                done
-            else
-                echo "Cancelled" >&2
-                return 1
-            fi
-        else
-            # Fallback to numbered list selection (fzf not available or disabled)
-            if [[ "$use_fzf" == false ]] && [[ -n "${GODEV_NO_FZF:-}" ]]; then
-                echo -e "${GRAY}[fzf disabled via GODEV_NO_FZF]${NC}" >&2
-            elif [[ "$use_fzf" == false ]] && [[ "$can_write_tmp" == false ]]; then
-                echo -e "${GRAY}[fzf disabled: no temp directory write access]${NC}" >&2
-            elif ! command -v fzf >/dev/null 2>&1; then
-                echo -e "${GRAY}[fzf not available]${NC}" >&2
-            fi
-            echo -e "${CYAN}Found $count directories:${NC}" >&2
-            echo "" >&2
-            local i=1
-            for dir in "${matches[@]}"; do
-                local rel_path="${dir#$DEV_BASE/}"
-                echo -e "  ${GREEN}[$i]${NC} ${rel_path}" >&2
-                ((i++))
-            done
-            echo "" >&2
-            
-            # Write prompt to stderr so it's visible even when output is captured
-            if [[ "$READONLY_MODE" == true ]]; then
-                echo -e "${GRAY}[READONLY MODE]${NC} Select a number (1-$count) to see path, or press Enter to cancel: " >&2
-            else
-                echo -n "Select a number (1-$count) or press Enter to cancel: " >&2
-            fi
-            
-            # Read from terminal - try /dev/tty first, fallback to stdin
-            if [[ -r /dev/tty ]]; then
-                read selection < /dev/tty
-            else
-                read selection
-            fi
-            
-            if [[ "$selection" =~ ^[0-9]+$ ]] && [[ "$selection" -ge 1 ]] && [[ "$selection" -le $count ]]; then
-                target_dir="${matches[$selection]}"
-            else
-                echo "Cancelled" >&2
-                return 1
-            fi
-        fi
+        # Read from /dev/tty to ensure we can read from terminal even if stdin is redirected
+        read selection < /dev/tty
         
-        # Output selected directory
-        if [[ -n "$target_dir" ]]; then
+        if [[ "$selection" =~ ^[0-9]+$ ]] && [[ "$selection" -ge 1 ]] && [[ "$selection" -le $count ]]; then
+            local target_dir="${matches[$selection]}"
             echo -e "${GREEN}→${NC} ${target_dir}"
             # Always output path in consistent format for function wrapper
             echo "Path: $target_dir"
-            # Also write to temp file for function wrapper (works when output is captured)
-            # Only if we have write permissions to temp directory
-            local tmp_dir="${TMPDIR:-/tmp}"
-            if [[ -w "$tmp_dir" ]]; then
-                local path_file="${tmp_dir}/godev_selected_path_$$"
-                echo "$target_dir" > "$path_file" 2>/dev/null || true
-            fi
+            # Also write to temp file for function wrapper to read
+            local path_file="${TMPDIR:-/tmp}/godev_selected_path_$$"
+            echo "$target_dir" > "$path_file"
             return 0
         else
+            echo "Cancelled" >&2
             return 1
         fi
     fi
