@@ -86,12 +86,12 @@ godev_function() {
         all_matches+=("$dir")
     done < <(find "$BASE_DIR" -maxdepth 2 -type d -iname "*${PATTERN}*" -print0 2>/dev/null)
 
-    # Filtrar resultados: excluir BASE_DIR y directorio del script
+    # Filtrar resultados: excluir BASE_DIR y cualquier directorio llamado "godev"
     local matches=()
-    local SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     for dir in "${all_matches[@]}"; do
-        # Excluir el BASE_DIR mismo y el directorio donde está el script
-        if [ "$dir" != "$BASE_DIR" ] && [ "$dir" != "$SCRIPT_DIR" ]; then
+        local dir_name=$(basename "$dir")
+        # Excluir el BASE_DIR mismo y directorios que se llamen "godev"
+        if [ "$dir" != "$BASE_DIR" ] && [ "$dir_name" != "godev" ]; then
             matches+=("$dir")
         fi
     done
@@ -111,9 +111,9 @@ godev_function() {
             echo "---------------------------------"
             
             if command -v tree &> /dev/null; then
-                tree -L "$TREE_LEVEL"
+                tree -L "$TREE_LEVEL" | grep -i "$PATTERN"
             else
-                ls -la
+                ls -la | grep -i "$PATTERN"
             fi
         else
             echo "❌ No se encontró ningún proyecto que coincida con: '$PATTERN'"
@@ -135,9 +135,9 @@ godev_function() {
         echo "---------------------------------"
         
         if command -v tree &> /dev/null; then
-            tree -L "$TREE_LEVEL"
+            tree -L "$TREE_LEVEL" | grep -i "$PATTERN"
         else
-            ls -la
+            ls -la | grep -i "$PATTERN"
         fi
         return 0
     fi
