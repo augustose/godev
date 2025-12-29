@@ -21,14 +21,14 @@
 ### One-line Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/tu-usuario/godev/main/install.sh | zsh
+curl -fsSL https://raw.githubusercontent.com/augustose/godev/main/install.sh | zsh
 ```
 
 ### Manual Install
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/tu-usuario/godev.git
+git clone https://github.com/augustose/godev.git
 cd godev
 
 # 2. Make executable
@@ -171,5 +171,5 @@ Licensed under the Apache License 2.0 - see [LICENSE](LICENSE) file for details.
 
 ---
 
-**Made with ❤️ by [Augusto Sosa Escalada](https://github.com/tu-usuario)**
+**Made with ❤️ by [Augusto Sosa Escalada](https://github.com/augustose)**
 

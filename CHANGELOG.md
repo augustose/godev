@@ -36,5 +36,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Theme customization
 - Plugin system
 
-[2.0.0]: https://github.com/tu-usuario/godev/releases/tag/v2.0.0
+[2.0.0]: https://github.com/augustose/godev/releases/tag/v2.0.0
 
