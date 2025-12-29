@@ -247,13 +247,11 @@ nav_command() {
         echo -e "${GREEN}→${NC} ${target_dir}"
         if [[ "$READONLY_MODE" == true ]]; then
             echo -e "${GRAY}[READONLY MODE]${NC} Would navigate to: $target_dir"
-            echo "Run: cd $target_dir"
+            # Always output path in consistent format for function wrapper
+            echo "Path: $target_dir"
         else
-            if [[ -n "$ZSH_VERSION" ]]; then
-                # Output path for sourcing
-                echo "Path: $target_dir"
-                echo "Run: cd $target_dir"
-            fi
+            # Output path for function wrapper to capture
+            echo "Path: $target_dir"
         fi
         return 0
     else
@@ -279,11 +277,9 @@ nav_command() {
             echo -e "${GREEN}→${NC} ${target_dir}"
             if [[ "$READONLY_MODE" == true ]]; then
                 echo -e "${GRAY}[READONLY MODE]${NC} Would navigate to: $target_dir"
-                echo "Run: cd $target_dir"
-            else
-                echo "Path: $target_dir"
-                echo "Run: cd $target_dir"
             fi
+            # Always output path in consistent format for function wrapper
+            echo "Path: $target_dir"
             return 0
         else
             echo "Cancelled"
