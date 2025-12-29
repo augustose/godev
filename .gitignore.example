@@ -1,0 +1,49 @@
+# godev - .gitignore Example
+# Copy this to .gitignore and customize as needed
+
+# Archivos personales y configuración local
+.DS_Store
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+*.log
+
+# Archivos de configuración con paths personales
+config.local.sh
+.env
+.env.local
+*.local
+
+# Archivos temporales
+tmp/
+temp/
+*.tmp
+
+# Archivos de backup
+*.bak
+*.backup
+*~
+
+# Archivos de sistema
+Thumbs.db
+.DS_Store
+
+# Archivos de test (si contienen datos sensibles)
+test-data/
+*.test.local
+
+# Archivos de build (si los hay)
+dist/
+build/
+*.o
+*.so
+
+# Archivos de caché
+.cache/
+*.cache
+
+# Archivos específicos del proyecto
+# Agregar aquí cualquier archivo que no deba estar en el repositorio público
+
