@@ -17,9 +17,12 @@
 #   multiple matches (interactive menu), and no matches (create option).
 #
 # INSTALLATION
+#   Note: This script requires ZSH (default on macOS) due to array indexing.
+#   It will NOT work correctly in Bash.
+#
 #   1. Save this script to a folder (e.g., ~/bin/godev)
 #   2. Make it executable: chmod +x ~/bin/godev
-#   3. Add this alias to your ~/.zshrc or ~/.bashrc to source it:
+#   3. Add this alias to your ~/.zshrc to source it:
 #      alias godev="source ~/bin/godev"
 #      (Sourcing is required to change the current shell directory)
 #
