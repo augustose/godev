@@ -91,6 +91,12 @@ source ~/.zshrc
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
+### Configuración interactiva (`godev --setup`)
+
+- Siempre muestra el valor actual de `DEV_BASE` y pide confirmación o un nuevo valor en cada ejecución de `--setup`.
+- Siempre pregunta si quieres habilitar la creación de directorios (`READONLY_MODE`), usando el valor actual como predeterminado.
+- Las preguntas usan `/dev/tty` cuando stdout está capturado (por ejemplo, al usar la función wrapper), de modo que los prompts aparecen incluso si la salida está redirigida. Solo se omiten preguntas en entornos sin TTY real (por ejemplo, CI), manteniendo los valores configurados.
+
 ### Solución de Problemas
 
 #### Error: "godev script not found"

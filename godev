@@ -43,7 +43,7 @@
 # -----------------------------------------------------------------------------
 
 VERSION="2.0.0"
-BUILD="47"  # Auto-incremented on each commit
+BUILD="70"  # Auto-incremented on each commit
 
 # Detect if output is to a terminal
 if [[ -t 1 ]]; then
@@ -70,12 +70,528 @@ else
     NC=''
 fi
 
+# Configuration file location
+CONFIG_DIR="${HOME}/.config/godev"
+CONFIG_FILE="${CONFIG_DIR}/config"
+
 # Base projects directory (adjust according to your configuration)
+# Can be overridden by config file or first-run setup
 DEV_BASE="${HOME}/DEV"
 
 # Configuration
 MAX_DEPTH=5  # Maximum depth for recursive search (0 = unlimited)
 READONLY_MODE=true  # Set to false to allow directory creation (for testing)
+
+# Load configuration if it exists
+if [[ -f "$CONFIG_FILE" ]]; then
+    source "$CONFIG_FILE"
+fi
+
+# Prompt helpers --------------------------------------------------------------
+# Some shells/functions wrap godev and capture stdout, so stdout might not be a
+# TTY even though the user is interactive. These helpers fall back to /dev/tty
+# so we can always ask questions during setup.
+can_prompt() {
+    [[ -t 0 || -t 1 || -r /dev/tty ]]
+}
+
+prompt_input() {
+    local __prompt="$1"
+    local __out_var="$2"
+    local __input=""
+
+    if [[ -t 0 ]] || [[ -t 1 ]]; then
+        IFS= read -r "__input?${__prompt}"
+    elif [[ -r /dev/tty ]]; then
+        IFS= read -r "__input?${__prompt}" < /dev/tty
+    else
+        return 1
+    fi
+
+    typeset -g "$__out_var"="$__input"
+    return 0
+}
+
+# First-run configuration wizard
+first_run_setup() {
+    # Check if already configured
+    if [[ -f "$CONFIG_FILE" ]]; then
+        # Configuration already exists, skip setup
+        return 0
+    fi
+    
+    # Only run setup if interactive
+    if [[ ! -t 0 ]] || [[ ! -t 1 ]]; then
+        # Non-interactive: use defaults
+        return 0
+    fi
+    
+    echo ""
+    echo -e "${CYAN}╔═══════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║${NC}  ${CYAN}⚙️  First-time Setup${NC}                                      ${CYAN}║${NC}"
+    echo -e "${CYAN}╚═══════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${GRAY}Welcome to godev! Let's configure it for the first time.${NC}"
+    echo ""
+    
+    # Ask about base directory
+    DEFAULT_DEV_BASE="${HOME}/DEV"
+    echo -e "${CYAN}Base directory configuration:${NC}"
+    echo -e "  This is where godev will search for your projects"
+    echo ""
+    read "?Base directory for projects (default: $DEFAULT_DEV_BASE): " custom_dev_base
+    
+    # Expand ~ and variables in user input
+    if [[ -n "$custom_dev_base" ]]; then
+        custom_dev_base="${custom_dev_base/#\~/$HOME}"
+        DEV_BASE=$(eval echo "$custom_dev_base")
+        
+        if [[ "$DEV_BASE" != /* ]]; then
+            echo -e "${YELLOW}⚠️  Path must be absolute. Using default: $DEFAULT_DEV_BASE${NC}"
+            DEV_BASE="$DEFAULT_DEV_BASE"
+        fi
+    else
+        DEV_BASE="$DEFAULT_DEV_BASE"
+    fi
+    
+    # Create directory if it doesn't exist
+    if [[ ! -d "$DEV_BASE" ]]; then
+        echo ""
+        read "?Directory $DEV_BASE doesn't exist. Create it? (Y/n): " create_dir
+        # Default to yes (empty response or Y/y means yes)
+        if [[ -z "$create_dir" ]] || [[ "$create_dir" == "y" ]] || [[ "$create_dir" == "Y" ]]; then
+            if mkdir -p "$DEV_BASE" 2>/dev/null; then
+                echo -e "${GREEN}✓ Directory created: $DEV_BASE${NC}"
+            else
+                echo -e "${RED}✗ Failed to create directory: $DEV_BASE${NC}"
+            fi
+        fi
+    fi
+    
+    # Ask about READONLY_MODE
+    echo ""
+    read "?Enable directory creation? (disable READONLY_MODE) (y/N): " disable_readonly
+    if [[ "$disable_readonly" == "y" ]] || [[ "$disable_readonly" == "Y" ]]; then
+        READONLY_MODE=false
+        echo -e "${GREEN}✓ Directory creation enabled${NC}"
+    else
+        READONLY_MODE=true
+        echo -e "${GRAY}Directory creation disabled${NC}"
+    fi
+    
+    # Save configuration
+    # Preserve existing INSTALL_URL if it exists
+    local existing_install_url=""
+    if [[ -f "$CONFIG_FILE" ]]; then
+        existing_install_url=$(grep -E '^INSTALL_URL=' "$CONFIG_FILE" 2>/dev/null | sed 's/INSTALL_URL="\(.*\)".*/\1/' || echo "")
+    fi
+    
+    mkdir -p "$CONFIG_DIR"
+    cat > "$CONFIG_FILE" <<EOF
+# godev configuration
+# Generated on first run setup
+DEV_BASE="$DEV_BASE"
+READONLY_MODE=$READONLY_MODE
+
+# Installation URL (optional)
+# Default official GitHub URL and command:
+# curl -fsSL https://raw.githubusercontent.com/augustose/godev/main/install.sh | zsh
+# Uncomment and set to use a custom installation source:
+EOF
+    
+    # Add INSTALL_URL if it exists, otherwise add comment
+    if [[ -n "$existing_install_url" ]]; then
+        echo "INSTALL_URL=\"$existing_install_url\"" >> "$CONFIG_FILE"
+    else
+        echo "# INSTALL_URL=\"https://raw.githubusercontent.com/augustose/godev/main\"" >> "$CONFIG_FILE"
+    fi
+    
+    echo ""
+    echo -e "${GREEN}✓ Configuration saved!${NC}"
+    echo ""
+}
+
+# Update command - check for updates and update godev
+update_command() {
+    echo ""
+    echo -e "${CYAN}╔═══════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║${NC}  ${CYAN}🔄 godev Update${NC}                                           ${CYAN}║${NC}"
+    echo -e "${CYAN}╚═══════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    
+    local INSTALL_DIR="${HOME}/.local/bin"
+    local BIN_NAME="godev"
+    local INSTALLED_SCRIPT="$INSTALL_DIR/$BIN_NAME"
+    
+    # Check if godev is installed
+    if [[ ! -f "$INSTALLED_SCRIPT" ]]; then
+        echo -e "${RED}✗ godev is not installed at $INSTALLED_SCRIPT${NC}"
+        echo ""
+        echo -e "${YELLOW}Install godev first:${NC}"
+        echo -e "  ${GREEN}curl -fsSL https://raw.githubusercontent.com/augustose/godev/main/install.sh | zsh${NC}"
+        echo ""
+        return 1
+    fi
+    
+    # Get current installed version
+    local current_version_output=$("$INSTALLED_SCRIPT" version 2>/dev/null || echo "")
+    local CURRENT_VERSION=""
+    if [[ -n "$current_version_output" ]]; then
+        CURRENT_VERSION=$(echo "$current_version_output" | sed 's/.*version //')
+    else
+        # Fallback: extract from script directly
+        local version=$(grep -E '^VERSION=' "$INSTALLED_SCRIPT" 2>/dev/null | sed 's/VERSION="\(.*\)".*/\1/' || echo "")
+        local build=$(grep -E '^BUILD=' "$INSTALLED_SCRIPT" 2>/dev/null | sed 's/BUILD="\(.*\)".*/\1/' || echo "")
+        if [[ -n "$version" ]] && [[ -n "$build" ]]; then
+            CURRENT_VERSION="${version}+build.${build}"
+        elif [[ -n "$version" ]]; then
+            CURRENT_VERSION="$version"
+        fi
+    fi
+    
+    if [[ -z "$CURRENT_VERSION" ]]; then
+        echo -e "${RED}✗ Could not determine current version${NC}"
+        return 1
+    fi
+    
+    echo -e "${CYAN}Current version: ${BLUE}$CURRENT_VERSION${NC}"
+    echo ""
+    
+    # Determine installation source
+    local GITHUB_REPO="https://raw.githubusercontent.com/augustose/godev/main"
+    local INSTALL_REPO="${INSTALL_URL:-$GITHUB_REPO}"
+    local source_name="GitHub"
+    if [[ -n "$INSTALL_URL" ]]; then
+        source_name="configured source"
+    fi
+    
+    echo -e "${CYAN}Checking for updates from $source_name...${NC}"
+    
+    # Download latest version to temp file
+    local TEMP_DIR=$(mktemp -d)
+    local TEMP_SCRIPT="$TEMP_DIR/godev"
+    
+    # Cleanup function for temp directory
+    local cleanup_temp() {
+        if [[ -n "$TEMP_DIR" ]] && [[ -d "$TEMP_DIR" ]]; then
+            rm -rf "$TEMP_DIR" 2>/dev/null
+        fi
+    }
+    
+    if ! curl -fsSL "$INSTALL_REPO/godev" -o "$TEMP_SCRIPT" 2>/dev/null; then
+        echo -e "${RED}✗ Failed to download latest version from $source_name${NC}"
+        cleanup_temp
+        return 1
+    fi
+    
+    chmod +x "$TEMP_SCRIPT"
+    
+    # Get new version
+    local new_version_output=$("$TEMP_SCRIPT" version 2>/dev/null || echo "")
+    local NEW_VERSION=""
+    if [[ -n "$new_version_output" ]]; then
+        NEW_VERSION=$(echo "$new_version_output" | sed 's/.*version //')
+    else
+        # Fallback: extract from script directly
+        local version=$(grep -E '^VERSION=' "$TEMP_SCRIPT" 2>/dev/null | sed 's/VERSION="\(.*\)".*/\1/' || echo "")
+        local build=$(grep -E '^BUILD=' "$TEMP_SCRIPT" 2>/dev/null | sed 's/BUILD="\(.*\)".*/\1/' || echo "")
+        if [[ -n "$version" ]] && [[ -n "$build" ]]; then
+            NEW_VERSION="${version}+build.${build}"
+        elif [[ -n "$version" ]]; then
+            NEW_VERSION="$version"
+        fi
+    fi
+    
+    if [[ -z "$NEW_VERSION" ]]; then
+        echo -e "${RED}✗ Could not determine new version${NC}"
+        cleanup_temp
+        return 1
+    fi
+    
+    echo -e "${CYAN}Available version: ${BLUE}$NEW_VERSION${NC}"
+    echo ""
+    
+    # Compare versions
+    if [[ "$NEW_VERSION" == "$CURRENT_VERSION" ]]; then
+        echo -e "${GREEN}✓ You already have the latest version!${NC}"
+        echo ""
+        cleanup_temp
+        return 0
+    fi
+    
+    echo -e "${YELLOW}An update is available!${NC}"
+    echo -e "  ${GRAY}Current:${NC}  $CURRENT_VERSION"
+    echo -e "  ${GREEN}New:${NC}      $NEW_VERSION"
+    echo ""
+    
+    # Ask for confirmation
+    if [[ -t 0 ]] && [[ -t 1 ]]; then
+        read "?Do you want to update? (y/N): " confirm
+        if [[ "$confirm" != "y" ]] && [[ "$confirm" != "Y" ]]; then
+            echo -e "${GRAY}Update cancelled.${NC}"
+            echo ""
+            cleanup_temp
+            return 0
+        fi
+    fi
+    
+    # Backup current version
+    local BACKUP_SCRIPT="$INSTALLED_SCRIPT.backup"
+    if cp "$INSTALLED_SCRIPT" "$BACKUP_SCRIPT" 2>/dev/null; then
+        echo -e "${GRAY}✓ Backup created: $BACKUP_SCRIPT${NC}"
+    fi
+    
+    # Install new version
+    echo -e "${CYAN}Installing update...${NC}"
+    if cp "$TEMP_SCRIPT" "$INSTALLED_SCRIPT" && chmod +x "$INSTALLED_SCRIPT"; then
+        echo -e "${GREEN}✓ Update successful!${NC}"
+        echo ""
+        echo -e "${GREEN}╔═══════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${GREEN}║${NC}  ${GREEN}✓ godev updated to $NEW_VERSION${NC}                      ${GREEN}║${NC}"
+        echo -e "${GREEN}╚═══════════════════════════════════════════════════════════╝${NC}"
+        echo ""
+        cleanup_temp
+        return 0
+    else
+        echo -e "${RED}✗ Update failed${NC}"
+        # Restore backup if available
+        if [[ -f "$BACKUP_SCRIPT" ]]; then
+            echo -e "${YELLOW}Restoring backup...${NC}"
+            cp "$BACKUP_SCRIPT" "$INSTALLED_SCRIPT" 2>/dev/null
+        fi
+        cleanup_temp
+        return 1
+    fi
+}
+
+# Setup command - configure PATH, function wrapper, and base directory
+setup_command() {
+    echo ""
+    echo -e "${CYAN}╔═══════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║${NC}  ${CYAN}⚙️  godev Setup${NC}                                            ${CYAN}║${NC}"
+    echo -e "${CYAN}╚═══════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    
+    local INSTALL_DIR="${HOME}/.local/bin"
+    local script_path=$(command -v godev 2>/dev/null || echo "$INSTALL_DIR/godev")
+    local made_changes=false
+    
+    # 1. Add PATH to .zshrc
+    echo -e "${CYAN}1. Configuring PATH...${NC}"
+    if [[ -f "$HOME/.zshrc" ]]; then
+        if ! grep -q "$INSTALL_DIR" "$HOME/.zshrc"; then
+            echo "" >> "$HOME/.zshrc"
+            echo "# godev" >> "$HOME/.zshrc"
+            echo "export PATH=\"\$HOME/.local/bin:\$PATH\"" >> "$HOME/.zshrc"
+            echo -e "${GREEN}✓ Added PATH to ~/.zshrc${NC}"
+            made_changes=true
+        else
+            echo -e "${GRAY}✓ PATH already configured in ~/.zshrc${NC}"
+        fi
+    else
+        echo "export PATH=\"\$HOME/.local/bin:\$PATH\"" > "$HOME/.zshrc"
+        echo -e "${GREEN}✓ Created ~/.zshrc with PATH${NC}"
+        made_changes=true
+    fi
+    
+    # 2. Add function wrapper to .zshrc
+    echo ""
+    echo -e "${CYAN}2. Configuring function wrapper...${NC}"
+    if ! grep -q "^godev()" "$HOME/.zshrc"; then
+        echo "" >> "$HOME/.zshrc"
+        echo "# godev function wrapper - automatically changes directory" >> "$HOME/.zshrc"
+        echo "godev() {" >> "$HOME/.zshrc"
+        echo "    local output=\$($script_path \"\$@\")" >> "$HOME/.zshrc"
+        echo "    echo \"\$output\"" >> "$HOME/.zshrc"
+        echo "    local path=\$(echo \"\$output\" | grep '^Path: ' | sed 's/^Path: //')" >> "$HOME/.zshrc"
+        echo "    if [[ -n \"\$path\" ]] && [[ -d \"\$path\" ]]; then" >> "$HOME/.zshrc"
+        echo "        cd \"\$path\"" >> "$HOME/.zshrc"
+        echo "    fi" >> "$HOME/.zshrc"
+        echo "}" >> "$HOME/.zshrc"
+        echo -e "${GREEN}✓ Function wrapper added to ~/.zshrc${NC}"
+        made_changes=true
+    else
+        echo -e "${GRAY}✓ Function wrapper already exists in ~/.zshrc${NC}"
+    fi
+    
+    # 3. Configure base directory
+    echo ""
+    echo -e "${CYAN}3. Configuring base directory...${NC}"
+    
+    # Show current value
+    local current_dev_base="$DEV_BASE"
+    local DEFAULT_DEV_BASE="${HOME}/DEV"
+    
+    # Use current value as default, or system default if not set
+    if [[ -z "$current_dev_base" ]] || [[ "$current_dev_base" == "${HOME}/DEV" ]]; then
+        current_dev_base="$DEFAULT_DEV_BASE"
+    fi
+    
+    echo -e "  ${GRAY}Current value:${NC} $current_dev_base"
+    echo -e "  This is where godev will search for your projects"
+    echo ""
+    
+    local setup_dev_base=""
+    if prompt_input "Enter base directory for projects [$current_dev_base]: " setup_dev_base; then
+        # If user provided input, use it; otherwise keep current value
+        if [[ -n "$setup_dev_base" ]]; then
+            setup_dev_base="${setup_dev_base/#\~/$HOME}"
+            DEV_BASE=$(eval echo "$setup_dev_base")
+            
+            if [[ "$DEV_BASE" != /* ]]; then
+                echo -e "${YELLOW}⚠️  Path must be absolute. Using current value: $current_dev_base${NC}"
+                DEV_BASE="$current_dev_base"
+            fi
+        else
+            DEV_BASE="$current_dev_base"
+            echo -e "${GRAY}✓ Keeping current value${NC}"
+        fi
+    else
+        # Non-interactive: use current value but inform the user
+        DEV_BASE="$current_dev_base"
+        echo -e "${YELLOW}⚠️  Could not prompt (non-interactive). Using current value: $DEV_BASE${NC}"
+    fi
+    
+    # Create directory if it doesn't exist
+    if [[ ! -d "$DEV_BASE" ]]; then
+        if prompt_input "Directory $DEV_BASE doesn't exist. Create it? (Y/n): " create_dir; then
+            # Default to yes (empty response or Y/y means yes)
+            if [[ -z "$create_dir" ]] || [[ "$create_dir" == "y" ]] || [[ "$create_dir" == "Y" ]]; then
+                if mkdir -p "$DEV_BASE" 2>/dev/null; then
+                    echo -e "${GREEN}✓ Directory created: $DEV_BASE${NC}"
+                else
+                    echo -e "${RED}✗ Failed to create directory: $DEV_BASE${NC}"
+                fi
+            else
+                echo -e "${GRAY}Skipping directory creation${NC}"
+            fi
+        else
+            # Non-interactive: try to create silently
+            if mkdir -p "$DEV_BASE" 2>/dev/null; then
+                echo -e "${GREEN}✓ Directory created: $DEV_BASE${NC}"
+            else
+                echo -e "${YELLOW}⚠️  Directory $DEV_BASE doesn't exist and could not be created in non-interactive mode${NC}"
+            fi
+        fi
+    else
+        echo -e "${GREEN}✓ Directory exists: $DEV_BASE${NC}"
+    fi
+    
+    # 4. Configure READONLY_MODE
+    echo ""
+    echo -e "${CYAN}4. Configuring directory creation...${NC}"
+    
+    # Show current value
+    local current_readonly="$READONLY_MODE"
+    # Default to true if not set
+    if [[ -z "$current_readonly" ]]; then
+        current_readonly=true
+    fi
+    
+    local readonly_status="disabled"
+    local readonly_default="n"
+    local readonly_default_display="n (disabled)"
+    if [[ "$current_readonly" == false ]]; then
+        readonly_status="enabled"
+        readonly_default="y"
+        readonly_default_display="y (enabled)"
+    fi
+    
+    echo -e "  ${GRAY}Current value:${NC} Directory creation is $readonly_status"
+    echo ""
+    
+    if prompt_input "Enable directory creation? (y=enable, n=disable) [$readonly_default_display]: " disable_readonly; then
+        # If user provided input, use it; otherwise use current value
+        if [[ -n "$disable_readonly" ]]; then
+            if [[ "$disable_readonly" == "y" ]] || [[ "$disable_readonly" == "Y" ]]; then
+                READONLY_MODE=false
+                echo -e "${GREEN}✓ Directory creation enabled${NC}"
+            else
+                READONLY_MODE=true
+                echo -e "${GRAY}Directory creation disabled${NC}"
+            fi
+        else
+            READONLY_MODE="$current_readonly"
+            echo -e "${GRAY}✓ Using current setting: $readonly_status${NC}"
+        fi
+    else
+        # Non-interactive: use current value but inform the user
+        READONLY_MODE="$current_readonly"
+        echo -e "${YELLOW}⚠️  Could not prompt (non-interactive). Directory creation: $readonly_status${NC}"
+    fi
+    
+    # Save configuration
+    # Preserve existing INSTALL_URL if it exists
+    local existing_install_url=""
+    if [[ -f "$CONFIG_FILE" ]]; then
+        existing_install_url=$(grep -E '^INSTALL_URL=' "$CONFIG_FILE" 2>/dev/null | sed 's/INSTALL_URL="\(.*\)".*/\1/' || echo "")
+    fi
+    
+    mkdir -p "$CONFIG_DIR"
+    cat > "$CONFIG_FILE" <<EOF
+# godev configuration
+# Generated by setup command
+DEV_BASE="$DEV_BASE"
+READONLY_MODE=$READONLY_MODE
+
+# Installation URL (optional)
+# Default official GitHub URL and command:
+# curl -fsSL https://raw.githubusercontent.com/augustose/godev/main/install.sh | zsh
+# Uncomment and set to use a custom installation source:
+EOF
+    
+    # Add INSTALL_URL if it exists, otherwise add comment
+    if [[ -n "$existing_install_url" ]]; then
+        echo "INSTALL_URL=\"$existing_install_url\"" >> "$CONFIG_FILE"
+    else
+        echo "# INSTALL_URL=\"https://raw.githubusercontent.com/augustose/godev/main\"" >> "$CONFIG_FILE"
+    fi
+    
+    echo ""
+    echo -e "${GREEN}╔═══════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║${NC}  ${GREEN}✓ Setup complete!${NC}                                         ${GREEN}║${NC}"
+    echo -e "${GREEN}╚═══════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    
+    # Try to source .zshrc automatically if we made changes and we're in an interactive shell
+    if [[ "$made_changes" == true ]] && [[ -t 0 ]] && [[ -t 1 ]] && [[ -n "$ZSH_VERSION" ]]; then
+        echo -e "${CYAN}Applying changes to current session...${NC}"
+        if source "$HOME/.zshrc" 2>/dev/null; then
+            echo -e "${GREEN}✓ Changes applied to current session${NC}"
+            echo ""
+        else
+            echo -e "${YELLOW}⚠️  Could not source ~/.zshrc automatically${NC}"
+            echo -e "  ${GREEN}Run: source ~/.zshrc${NC}"
+            echo ""
+        fi
+    elif [[ "$made_changes" == true ]]; then
+        echo -e "${YELLOW}⚠️  Run the following to apply changes:${NC}"
+        echo -e "  ${GREEN}source ~/.zshrc${NC}"
+        echo ""
+        echo -e "${GRAY}Or open a new terminal session${NC}"
+        echo ""
+    else
+        echo -e "${GRAY}✓ Configuration is already active${NC}"
+        echo ""
+    fi
+    
+    # Suggest trying godev
+    echo -e "${CYAN}Try it out:${NC}"
+    echo -e "  ${GREEN}godev help${NC}        # Show help"
+    echo -e "  ${GREEN}godev status${NC}     # Check project status"
+    echo ""
+    
+    # Show configuration information
+    echo -e "${CYAN}Configuration information:${NC}"
+    echo -e "  ${GRAY}Script location:${NC}     ${GREEN}$script_path${NC}"
+    echo -e "  ${GRAY}Config file:${NC}         ${GREEN}$CONFIG_FILE${NC}"
+    echo ""
+    echo -e "${GRAY}You can edit the configuration file to customize:${NC}"
+    echo -e "  ${GREEN}• DEV_BASE${NC}          - Base directory for projects"
+    echo -e "  ${GREEN}• READONLY_MODE${NC}     - Enable/disable directory creation"
+    echo -e "  ${GREEN}• INSTALL_URL${NC}       - Custom installation source URL"
+    echo ""
+}
 
 # Show help
 show_help() {
@@ -89,6 +605,8 @@ show_help() {
     echo -e "    ${GREEN}status, s${NC} [options]     Show project activity status"
     echo -e "    ${GREEN}list, l${NC}                 List all projects"
     echo -e "    ${GREEN}ai-status${NC}               Check AI development tools status"
+    echo -e "    ${GREEN}setup${NC}                   Configure PATH, function wrapper, and base directory"
+    echo -e "    ${GREEN}update${NC}                  Check for updates and update godev"
     echo -e "    ${GREEN}version, v${NC}              Show version"
     echo -e "    ${GREEN}help, h${NC}                 Show this help"
     echo ""
@@ -100,14 +618,15 @@ show_help() {
     echo "    -d, --dir <path>         Base directory to scan (default: ~/DEV)"
     echo "    -s, --sort <mode>        Sort mode: date|name|activity (default: date)"
     echo "    -f, --filter <days>      Show only projects active in last N days"
-    echo "    -a, --all                Show all projects, including non-Git directories"
+    echo "    -a, --all                Show all projects, including non-Git (default)"
+    echo "    -g, --git-only           Show only Git repositories"
     echo ""
     echo -e "${CYAN}EXAMPLES:${NC}"
     echo "    godev nav react          # Navigate to react project"
     echo "    godev react              # Same (nav is default)"
-    echo "    godev status             # Show all project statuses"
-    echo "    godev status -f 7        # Show active in last 7 days"
-    echo "    godev status -a          # Show all projects including non-Git"
+    echo "    godev status             # Show all project statuses (default: includes non-Git)"
+    echo "    godev status -f 7         # Show active in last 7 days"
+    echo "    godev status -g           # Show only Git repositories"
     echo "    godev list               # List all projects"
     echo "    godev ai-status          # Check AI tools"
     echo ""
@@ -124,7 +643,16 @@ show_help() {
 
 # Main command dispatcher
 main() {
+    # Run first-time setup if needed (skip for help/version/update commands)
     local command="$1"
+    if [[ "$command" != "help" ]] && [[ "$command" != "h" ]] && \
+       [[ "$command" != "version" ]] && [[ "$command" != "v" ]] && \
+       [[ "$command" != "update" ]] && [[ "$command" != "--update" ]] && \
+       [[ "$command" != "-h" ]] && [[ "$command" != "--help" ]] && \
+       [[ "$command" != "-v" ]] && [[ "$command" != "--version" ]]; then
+        first_run_setup
+    fi
+    
     # Only shift if we have arguments
     if [[ $# -gt 0 ]]; then
         shift
@@ -147,12 +675,34 @@ main() {
                 show_help
                 exit 0
                 ;;
+            --setup)
+                setup_command
+                exit 0
+                ;;
+            --update)
+                update_command
+                exit 0
+                ;;
             *)
                 # Unknown flag, treat as nav pattern
                 nav_command "$command" "$@"
                 return
                 ;;
         esac
+    fi
+    
+    # If command is not a known command, treat as nav pattern (default behavior)
+    if [[ "$command" != "nav" ]] && [[ "$command" != "n" ]] && \
+       [[ "$command" != "status" ]] && [[ "$command" != "s" ]] && \
+       [[ "$command" != "list" ]] && [[ "$command" != "l" ]] && \
+       [[ "$command" != "ai-status" ]] && [[ "$command" != "ai" ]] && \
+       [[ "$command" != "setup" ]] && \
+       [[ "$command" != "update" ]] && \
+       [[ "$command" != "help" ]] && [[ "$command" != "h" ]] && \
+       [[ "$command" != "version" ]] && [[ "$command" != "v" ]]; then
+        # Treat as nav pattern (default behavior)
+        nav_command "$command" "$@"
+        return
     fi
     
     case "$command" in
@@ -167,6 +717,12 @@ main() {
             ;;
         ai-status|ai)
             ai_status_command "$@"
+            ;;
+        setup)
+            setup_command
+            ;;
+        update)
+            update_command
             ;;
         version|v)
             echo "godev version $VERSION+build.$BUILD"
@@ -266,7 +822,16 @@ nav_command() {
         if [[ "$force_create" == true ]]; then
             if [[ "$READONLY_MODE" == true ]]; then
                 echo -e "${YELLOW}[READONLY MODE]${NC} Would create directory: ${DEV_BASE}/${pattern}"
-                echo "To actually create it, set READONLY_MODE=false in the script"
+                echo ""
+                echo "To enable directory creation, edit the godev script:"
+                # Try to find where godev is installed
+                local godev_path=$(command -v godev 2>/dev/null || echo "${HOME}/.local/bin/godev")
+                echo -e "  ${CYAN}1.${NC} Open: ${GREEN}$godev_path${NC}"
+                echo -e "  ${CYAN}2.${NC} Find the line: ${GREEN}READONLY_MODE=true${NC}"
+                echo -e "  ${CYAN}3.${NC} Change it to: ${GREEN}READONLY_MODE=false${NC}"
+                echo -e "  ${CYAN}4.${NC} Save the file"
+                echo ""
+                echo -e "  ${GRAY}Quick command: sed -i 's/READONLY_MODE=true/READONLY_MODE=false/' $godev_path${NC}"
                 return 0
             else
                 local new_dir="${DEV_BASE}/${pattern}"
@@ -338,7 +903,8 @@ nav_command() {
 
 # Status command (migrated from govap.sh)
 status_command() {
-    local SHOW_ALL=false
+    local SHOW_ALL=true  # Default: show all projects (including non-Git)
+    local GIT_ONLY=false
     local SORT_MODE="date"
     local FILTER_DAYS=""
     local status_dev_base="$DEV_BASE"
@@ -360,6 +926,12 @@ status_command() {
                 ;;
             -a|--all)
                 SHOW_ALL=true
+                GIT_ONLY=false
+                shift
+                ;;
+            -g|--git-only)
+                SHOW_ALL=false
+                GIT_ONLY=true
                 shift
                 ;;
             -h|--help)
@@ -371,7 +943,8 @@ status_command() {
                 echo "  -d, --dir <path>      Base directory to scan (default: ~/DEV)"
                 echo "  -s, --sort <mode>     Sort mode: date|name|activity (default: date)"
                 echo "  -f, --filter <days>   Show only projects active in last N days"
-                echo "  -a, --all             Show all projects, including non-Git directories"
+                echo "  -a, --all             Show all projects, including non-Git (default)"
+                echo "  -g, --git-only        Show only Git repositories"
                 echo "  -h, --help            Show this help"
                 return 0
                 ;;
@@ -515,7 +1088,7 @@ status_command() {
         local commits="${fields[7]}"
         local total="${fields[8]}"
         
-        # Skip if no git and not showing all
+        # Skip if no git and not showing all (git-only mode or explicit --git-only)
         if [[ "$repo_status" == "NO_GIT" ]] && [[ "$SHOW_ALL" != true ]]; then
             continue
         fi
