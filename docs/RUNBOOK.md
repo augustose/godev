@@ -61,7 +61,7 @@ El script detectará automáticamente que `godev` ya está instalado y te pregun
 
 1. **Detecta la versión instalada**: Muestra la versión actual si está disponible
 2. **Pregunta por confirmación**: Te permite confirmar antes de sobrescribir
-3. **Descarga la última versión**: Obtiene la versión más reciente desde GitHub
+3. **Descarga la última versión**: Obtiene la versión más reciente desde la URL de instalación configurada y la muestra (ej. `https://raw.githubusercontent.com/augustose/godev/main/godev`)
 4. **Reemplaza el script**: Actualiza el archivo en `~/.local/bin/godev`
 5. **Mantiene la configuración**: No modifica tu PATH ni otras configuraciones
 

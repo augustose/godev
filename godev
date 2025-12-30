@@ -43,7 +43,7 @@
 # -----------------------------------------------------------------------------
 
 VERSION="2.0.0"
-BUILD="70"  # Auto-incremented on each commit
+BUILD="71"  # Auto-incremented on each commit
 
 # Detect if output is to a terminal
 if [[ -t 1 ]]; then
@@ -265,7 +265,9 @@ update_command() {
         source_name="configured source"
     fi
     
+    local update_url="$INSTALL_REPO/godev"
     echo -e "${CYAN}Checking for updates from $source_name...${NC}"
+    echo -e "${GRAY}Source:${NC} $update_url"
     
     # Download latest version to temp file
     local TEMP_DIR=$(mktemp -d)
@@ -278,8 +280,9 @@ update_command() {
         fi
     }
     
-    if ! curl -fsSL "$INSTALL_REPO/godev" -o "$TEMP_SCRIPT" 2>/dev/null; then
+    if ! curl -fsSL "$update_url" -o "$TEMP_SCRIPT" 2>/dev/null; then
         echo -e "${RED}✗ Failed to download latest version from $source_name${NC}"
+        echo -e "${GRAY}Tried:${NC} $update_url"
         cleanup_temp
         return 1
     fi

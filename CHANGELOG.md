@@ -29,6 +29,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `godev --setup` now always prompts user for base directory and readonly mode, even when values exist
+- Setup command now uses `/dev/tty` for prompts to work correctly when stdout is captured by wrapper functions
+
+### Changed
+- `godev update` now displays the source URL used for downloading updates
+- Updated documentation to reflect new setup and update behaviors
+
 ### Planned
 - AI tool detection implementation
 - Interactive mode with fzf
