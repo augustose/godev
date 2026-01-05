@@ -513,10 +513,6 @@ ${BOLD}NAVEGACIÓN:${NC}
 
 ${BOLD}COMANDOS:${NC}
     ${CYAN}--list${NC}                  ${GRAY}# Listar todos los proyectos con información${NC}
-    ${CYAN}--list --git${NC}            ${GRAY}# Solo repositorios git${NC}
-    ${CYAN}--list --modified 7${NC}     ${GRAY}# Modificados en últimos 7 días${NC}
-    ${CYAN}--list --pattern "web*"${NC} ${GRAY}# Filtrar por patrón${NC}
-    ${CYAN}--list --sort activity${NC}  ${GRAY}# Ordenar por actividad${NC}
     ${CYAN}--setup${NC}                 ${GRAY}# Configurar/reconfigurar godev${NC}
     ${CYAN}--version${NC}               ${GRAY}# Mostrar versión${NC}
     ${CYAN}--help${NC}                  ${GRAY}# Mostrar esta ayuda${NC}
@@ -526,7 +522,7 @@ ${BOLD}EJEMPLOS:${NC}
     ${GREEN}godev web${NC}                 ${GRAY}# Busca proyectos con "web" en el nombre${NC}
     ${GREEN}godev my-app${NC}              ${GRAY}# Va a my-app (o lo crea si no existe)${NC}
     ${GREEN}godev --list${NC}              ${GRAY}# Lista todos los proyectos con estado git${NC}
-    ${GREEN}godev --list --modified 7${NC} ${GRAY}# Proyectos modificados esta semana${NC}
+    ${GREEN}godev --list | grep "web"${NC} ${GRAY}# Filtrar proyectos (usar grep)${NC}
 
 ${BOLD}CARACTERÍSTICAS:${NC}
     ${GREEN}✓${NC} Búsqueda fuzzy inteligente
@@ -543,8 +539,8 @@ ${BOLD}RECOMENDACIÓN:${NC}
     Instala FZF para experiencia premium: ${CYAN}brew install fzf${NC}
 
 ${BOLD}MÁS INFO:${NC}
-    GitHub: ${CYAN}https://github.com/YOUR_USER/godev${NC}
-    Docs: ${CYAN}README.md, EXAMPLES.md, TESTING.md${NC}
+    GitHub: ${CYAN}https://github.com/augustose/godev${NC}
+    Docs: ${CYAN}README.md, architecture.md, testing_guide.md${NC}
 
 ${GRAY}Made with ❤️  for developers who value their time${NC}
 

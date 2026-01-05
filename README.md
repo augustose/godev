@@ -301,20 +301,22 @@ GODEV_FZF_ENABLED="true"            # Enable FZF integration
 
 ## 🎓 Advanced Usage
 
-### Filter and Sort
+### Filtering Project Lists
+
+Use `grep` to filter the output:
 
 ```bash
-# Filter by pattern
-godev --list --pattern "web*"
-
-# Modified in last 7 days
-godev --list --modified 7
+# Filter by name pattern
+godev --list | grep -i "web"
 
 # Only Git repositories
-godev --list --git
+godev --list | grep -v "NO_GIT"
 
-# Sort by activity
-godev --list --sort activity
+# Only modified projects
+godev --list | grep "modified"
+
+# Combine filters
+godev --list | grep -v "NO_GIT" | grep "modified"
 ```
 
 ### Combine with Other Tools
