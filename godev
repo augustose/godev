@@ -496,6 +496,87 @@ list_projects() {
     echo ""
 }
 
+list_projects_with_pattern() {
+    local search="$1"
+    load_config || return 1
+
+    echo ""
+    echo "${BOLD}${CYAN}Proyectos que coinciden con '${search}':${NC}"
+    echo ""
+
+    printf "${BOLD}%-45s %-20s %-15s %-12s %-15s${NC}\n" "PROJECT" "LAST COMMIT" "BRANCH" "STATUS" "ACTIVITY (30d)"
+    printf "%s\n" "────────────────────────────────────────────────────────────────────────────────────────────────────"
+
+    local total=0
+    local with_git=0
+    local modified=0
+    local clean_base="${GODEV_BASE_DIR%/}"
+
+    while IFS= read -r project; do
+        local name="${project#$clean_base/}"
+
+        # Filtrar por pattern (case-insensitive)
+        if [[ ! "${name:l}" == *"${search:l}"* ]]; then
+            continue
+        fi
+
+        local git_raw=$(get_git_info "$project")
+        local has_git=$(echo "$git_raw" | grep -o "has_git:[^|]*" | cut -d: -f2)
+
+        printf "%-45s " "$name"
+
+        if [[ "$has_git" == "true" ]]; then
+            local last_commit=$(echo "$git_raw" | grep -o "last_commit:[^|]*" | cut -d: -f2)
+            local branch=$(echo "$git_raw" | grep -o "branch:[^|]*" | cut -d: -f2)
+            local project_status=$(echo "$git_raw" | grep -o "status:[^|]*" | cut -d: -f2)
+            local activity=$(echo "$git_raw" | grep -o "activity:[^|]*" | cut -d: -f2)
+
+            printf "%-20s " "$last_commit"
+            printf "${CYAN}%-15s${NC} " "$branch"
+
+            if [[ "$project_status" == "modified" ]]; then
+                printf "${YELLOW}● %-10s${NC} " "$project_status"
+                ((modified++))
+            else
+                printf "${GREEN}✓ %-10s${NC} " "$project_status"
+            fi
+
+            # Indicador de actividad
+            local bars=""
+            if (( activity > 20 )); then
+                bars="${GREEN}●●●${NC}"
+            elif (( activity > 5 )); then
+                bars="${YELLOW}●●○${NC}"
+            elif (( activity > 0 )); then
+                bars="${GRAY}●○○${NC}"
+            else
+                bars="${GRAY}○○○${NC}"
+            fi
+
+            printf "%b (%-3s)\n" "$bars" "$activity"
+            ((with_git++))
+        else
+            printf "${GRAY}%-20s %-15s %-12s %-15s${NC}\n" "NO_GIT" "N/A" "N/A" "○○○"
+        fi
+
+        ((total++))
+    done < <(scan_projects "$GODEV_BASE_DIR")
+
+    printf "%s\n" "────────────────────────────────────────────────────────────────────────────────────────────────────"
+
+    if [[ $total -eq 0 ]]; then
+        echo ""
+        echo "${YELLOW}⚠ No se encontraron proyectos con '${search}'${NC}"
+        echo ""
+        return 1
+    fi
+
+    echo ""
+    echo "${BOLD}Total: $total proyecto(s)${NC}"
+    echo ""
+    return 0
+}
+
 # ============================================================================
 # COMANDOS PRINCIPALES
 # ============================================================================
@@ -508,21 +589,26 @@ ${BOLD}Navigate 100+ projects in seconds. Make sense of complexity.${NC}
 
 ${BOLD}NAVEGACIÓN:${NC}
     ${CYAN}godev${NC}                   ${GRAY}# Menú interactivo (FZF)${NC}
-    ${CYAN}godev <nombre>${NC}          ${GRAY}# Cambiar a proyecto (fuzzy search)${NC}
-    ${CYAN}godev <parcial>${NC}         ${GRAY}# Buscar proyectos que coincidan${NC}
+    ${CYAN}godev <nombre>${NC}          ${GRAY}# Cambiar a proyecto${NC}
+    ${CYAN}godev <parcial>${NC}         ${GRAY}# Buscar y seleccionar si múltiples${NC}
 
-${BOLD}COMANDOS:${NC}
-    ${CYAN}--list${NC}                  ${GRAY}# Listar todos los proyectos con información${NC}
+${BOLD}LISTADO:${NC}
+    ${CYAN}godev --list${NC}            ${GRAY}# Listar TODOS los proyectos${NC}
+    ${CYAN}godev -l${NC}                ${GRAY}# (forma corta)${NC}
+    ${CYAN}godev <pattern> -l${NC}      ${GRAY}# Listar proyectos que coincidan${NC}
+
+${BOLD}OTROS COMANDOS:${NC}
     ${CYAN}--setup${NC}                 ${GRAY}# Configurar/reconfigurar godev${NC}
-    ${CYAN}--version${NC}               ${GRAY}# Mostrar versión${NC}
-    ${CYAN}--help${NC}                  ${GRAY}# Mostrar esta ayuda${NC}
+    ${CYAN}--version, -v${NC}           ${GRAY}# Mostrar versión${NC}
+    ${CYAN}--help, -h${NC}              ${GRAY}# Mostrar esta ayuda${NC}
 
 ${BOLD}EJEMPLOS:${NC}
     ${GREEN}godev${NC}                     ${GRAY}# Selector interactivo de todos los proyectos${NC}
-    ${GREEN}godev web${NC}                 ${GRAY}# Busca proyectos con "web" en el nombre${NC}
+    ${GREEN}godev web${NC}                 ${GRAY}# Navega a "web" o selector si múltiples${NC}
     ${GREEN}godev my-app${NC}              ${GRAY}# Va a my-app (o lo crea si no existe)${NC}
-    ${GREEN}godev --list${NC}              ${GRAY}# Lista todos los proyectos con estado git${NC}
-    ${GREEN}godev --list | grep "web"${NC} ${GRAY}# Filtrar proyectos (usar grep)${NC}
+    ${GREEN}godev -l${NC}                  ${GRAY}# Lista todos los proyectos${NC}
+    ${GREEN}godev web -l${NC}              ${GRAY}# Lista solo proyectos con "web"${NC}
+    ${GREEN}godev alithya -l${NC}          ${GRAY}# Lista proyectos del cliente "alithya"${NC}
 
 ${BOLD}CARACTERÍSTICAS:${NC}
     ${GREEN}✓${NC} Búsqueda fuzzy inteligente
@@ -576,7 +662,7 @@ main() {
             setup_config
             return $?
             ;;
-        --list)
+        --list|-l)
             list_projects "$2"
             return $?
             ;;
@@ -585,7 +671,13 @@ main() {
             return 0
             ;;
         *)
-            # Navegación
+            # Verificar si el segundo argumento es -l (listar con pattern)
+            if [[ "$2" == "-l" ]]; then
+                list_projects_with_pattern "$1"
+                return $?
+            fi
+
+            # Navegación normal
             navigate_to_project "$1"
             return $?
             ;;

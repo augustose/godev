@@ -206,13 +206,20 @@ sudo dnf install fzf
 ### Basic Commands
 
 ```bash
+# Navigation
 godev                     # Interactive fuzzy finder (with FZF)
 godev <project>           # Jump to project
 godev <partial-name>      # Fuzzy search with selection
-godev --list              # List all projects with Git stats
+
+# Listing
+godev --list              # List ALL projects with Git stats
+godev -l                  # Short form
+godev <pattern> -l        # List projects matching pattern
+
+# Other
 godev --setup             # Configure or reconfigure
-godev --version           # Show version
-godev --help              # Show help
+godev --version, -v       # Show version
+godev --help, -h          # Show help
 ```
 
 ### Real-World Examples
@@ -232,9 +239,11 @@ Selecciona: 2
 ✓ You're in react-native-app
 ```
 
-#### Example 2: Project Overview
+#### Example 2: List All Projects
 
 ```bash
+$ godev -l
+# or
 $ godev --list
 
 PROJECT                    LAST COMMIT      BRANCH       STATUS       ACTIVITY (30d)
@@ -243,6 +252,22 @@ godev                     5 hours ago      main         ● modified   ●●●
 webapp                    2 days ago       develop      ✓ clean      ●●○ (12)
 api-backend               1 week ago       main         ✓ clean      ●○○ (4)
 mobile-app                3 weeks ago      feature/auth ● modified   ○○○ (0)
+```
+
+#### Example 2b: **NEW** - List Projects by Pattern
+
+```bash
+$ godev web -l
+
+Proyectos que coinciden con 'web':
+
+PROJECT                  LAST COMMIT      BRANCH       STATUS       ACTIVITY (30d)
+────────────────────────────────────────────────────────────────────────────────
+webapp                  2 hours ago      main         ● modified   ●●● (45)
+web-api                 1 day ago        develop      ✓ clean      ●●○ (12)
+website-redesign        3 days ago       feature/new  ✓ clean      ●○○ (3)
+
+Total: 3 proyecto(s)
 ```
 
 #### Example 3: Interactive Mode with FZF
@@ -303,20 +328,30 @@ GODEV_FZF_ENABLED="true"            # Enable FZF integration
 
 ### Filtering Project Lists
 
-Use `grep` to filter the output:
+**NEW:** Use the `-l` flag with a pattern for built-in filtering:
 
 ```bash
-# Filter by name pattern
-godev --list | grep -i "web"
+# List projects matching pattern
+godev web -l              # Projects with "web"
+godev api -l              # Projects with "api"
+godev alithya -l          # Projects in "alithya" folder
 
+# Quick check before navigating
+godev webapp -l           # See status of webapp
+godev webapp              # Then navigate to it
+```
+
+You can also use `grep` for more complex filtering:
+
+```bash
 # Only Git repositories
-godev --list | grep -v "NO_GIT"
+godev -l | grep -v "NO_GIT"
 
 # Only modified projects
-godev --list | grep "modified"
+godev -l | grep "modified"
 
 # Combine filters
-godev --list | grep -v "NO_GIT" | grep "modified"
+godev -l | grep -v "NO_GIT" | grep "modified"
 ```
 
 ### Combine with Other Tools
