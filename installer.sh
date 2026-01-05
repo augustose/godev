@@ -18,8 +18,8 @@ INSTALL_DIR="$HOME/.local/bin"
 GODEV_SCRIPT="$INSTALL_DIR/godev"
 ZSHRC="$HOME/.zshrc"
 
-# URL del script principal (cambiar según tu repo)
-SCRIPT_URL="https://raw.githubusercontent.com/YOUR_USER/godev/main/godev"
+# URL del script principal
+SCRIPT_URL="https://raw.githubusercontent.com/augustose/godev/main/godev"
 
 echo "${BOLD}${CYAN}"
 cat << "EOF"
@@ -40,6 +40,20 @@ echo ""
 # ============================================================================
 # VERIFICACIONES
 # ============================================================================
+
+# Verificar instalación existente
+if [[ -x "$GODEV_SCRIPT" ]]; then
+    CURRENT_VERSION=$(~/.local/bin/godev --version 2>/dev/null | grep -o '[0-9.]*' || echo "desconocida")
+    echo "${YELLOW}⚠ godev ya está instalado (versión $CURRENT_VERSION)${NC}"
+    echo -n "¿Actualizar/reinstalar? (s/N): "
+    read -k 1 reinstall
+    echo
+    echo ""
+    if [[ ! "$reinstall" =~ ^[sS]$ ]]; then
+        echo "${CYAN}Instalación cancelada${NC}"
+        exit 0
+    fi
+fi
 
 echo "${CYAN}[1/10]${NC} Verificando ZSH..."
 if [[ -z "$ZSH_VERSION" ]]; then
@@ -90,7 +104,10 @@ echo "${CYAN}[4/10]${NC} Verificando PATH..."
 if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
     echo "${YELLOW}⚠ $INSTALL_DIR no está en PATH${NC}"
     echo "  Agregando a ~/.zshrc..."
-    
+
+    # Backup antes de modificar
+    cp "$ZSHRC" "$ZSHRC.backup-$(date +%s)" 2>/dev/null
+
     echo "" >> "$ZSHRC"
     echo "# godev - agregado por instalador" >> "$ZSHRC"
     echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$ZSHRC"
@@ -148,9 +165,11 @@ if grep -q "^godev()" "$ZSHRC" 2>/dev/null; then
     echo
     
     if [[ "$replace" =~ ^[sS]$ ]]; then
+        # Backup antes de modificar
+        cp "$ZSHRC" "$ZSHRC.backup-$(date +%s)"
         # Remover función vieja (entre godev() { y el } que la cierra)
         sed -i.backup '/^godev() {$/,/^}$/d' "$ZSHRC"
-        echo "${GREEN}✓ Función anterior removida${NC}"
+        echo "${GREEN}✓ Función anterior removida (backup creado)${NC}"
     else
         echo "${YELLOW}⚠ Usando función existente${NC}"
         SKIP_WRAPPER=true
@@ -164,8 +183,8 @@ if [[ "$SKIP_WRAPPER" != "true" ]]; then
 godev() {
     local result
     
-    # Comandos que no cambian directorio (empiezan con --)
-    if [[ "$1" =~ ^-- ]]; then
+    # Comandos que no cambian directorio (empiezan con -)
+    if [[ "$1" =~ ^- ]]; then
         command ~/.local/bin/godev "$@"
         return $?
     fi
@@ -194,7 +213,7 @@ fi
 echo ""
 echo "${CYAN}[8/10]${NC} Guardando información de instalación..."
 cat > "${XDG_CONFIG_HOME:-$HOME/.config}/godev/version_info" << EOF
-version=1.0.0
+version=2.1.11
 install_date=$(date +%s)
 install_source=$SCRIPT_URL
 fzf_available=$FZF_INSTALLED
@@ -241,11 +260,41 @@ EOF
 echo "${GREEN}✓ Configuración guardada${NC}"
 
 # ============================================================================
+# VERIFICACIÓN POST-INSTALACIÓN
+# ============================================================================
+
+echo ""
+echo "${CYAN}[10/11]${NC} Verificando instalación..."
+
+# Verificar que el script existe y es ejecutable
+if [[ -x "$GODEV_SCRIPT" ]]; then
+    echo "${GREEN}✓ Script instalado correctamente${NC}"
+else
+    echo "${RED}✗ Error: Script no encontrado o sin permisos${NC}"
+    exit 1
+fi
+
+# Verificar que la función wrapper existe en .zshrc
+if grep -q "^godev()" "$ZSHRC"; then
+    echo "${GREEN}✓ Función wrapper configurada${NC}"
+else
+    echo "${YELLOW}⚠ Función wrapper no encontrada en .zshrc${NC}"
+fi
+
+# Verificar configuración
+if [[ -f "${XDG_CONFIG_HOME:-$HOME/.config}/godev/config" ]]; then
+    echo "${GREEN}✓ Configuración creada${NC}"
+else
+    echo "${RED}✗ Error: Archivo de configuración no encontrado${NC}"
+    exit 1
+fi
+
+# ============================================================================
 # FINALIZAR
 # ============================================================================
 
 echo ""
-echo "${CYAN}[10/10]${NC} Finalizando instalación..."
+echo "${CYAN}[11/11]${NC} Finalizando instalación..."
 echo ""
 
 cat << EOF
