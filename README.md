@@ -105,7 +105,7 @@ godev --list         # See all projects with Git info
 
 ### ⚡ **Lightning Fast**
 - Navigate in milliseconds
-- Smart caching (configurable TTL)
+- Efficient project scanning
 - Handles 500+ projects easily
 - Minimal resource usage
 
@@ -295,20 +295,6 @@ Edit `~/.config/godev/config`:
 ```bash
 GODEV_BASE_DIR="/home/user/dev"    # Your projects directory
 GODEV_FZF_ENABLED="true"            # Enable FZF integration
-GODEV_CACHE_TTL=3600                # Cache timeout (seconds)
-```
-
-### Cache Management
-
-```bash
-# Force cache refresh
-rm ~/.config/godev/cache
-godev --list
-
-# Cache location
-~/.config/godev/cache
-
-# Auto-refreshes every hour (configurable via GODEV_CACHE_TTL)
 ```
 
 ---
@@ -376,8 +362,7 @@ Benchmarks on a laptop with 127 projects:
 | Operation | Time | Notes |
 |-----------|------|-------|
 | Navigate to project | <100ms | Instant |
-| List (with cache) | ~200ms | Fast |
-| List (without cache) | ~2s | First time |
+| List all projects | ~2s | Real-time scan |
 | Fuzzy search | <50ms | Real-time |
 
 **Tested with 500+ projects** - still blazing fast! ⚡

@@ -254,7 +254,6 @@ cat > "${XDG_CONFIG_HOME:-$HOME/.config}/godev/config" << EOF
 # godev configuration
 GODEV_BASE_DIR="$base_dir"
 GODEV_FZF_ENABLED="$FZF_INSTALLED"
-GODEV_CACHE_TTL=3600
 EOF
 
 echo "${GREEN}✓ Configuración guardada${NC}"

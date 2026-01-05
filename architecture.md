@@ -43,7 +43,7 @@
 │  │  Scanner        │  │  • Status       │                   │
 │  │  • Find dirs    │  │  • Branch       │                   │
 │  │  • Filter       │  │  • Last commit  │                   │
-│  │  • Cache        │  │  • Activity     │                   │
+│  │  • Exclude      │  │  • Activity     │                   │
 │  └─────────────────┘  └─────────────────┘                   │
 │                                                               │
 │  ┌─────────────────┐  ┌─────────────────┐                   │
@@ -66,7 +66,6 @@
 │                                                               │
 │  ~/.config/godev/                                            │
 │    ├── config          (configuración principal)             │
-│    ├── cache           (cache de escaneos)                   │
 │    └── version_info    (URL origen, versión actual)          │
 │                                                               │
 │  ~/dev/ (o base_dir configurado)                             │
@@ -175,7 +174,6 @@ godev() {
 base_dir=/home/user/dev
 install_source=https://raw.githubusercontent.com/user/godev/main/install.sh
 fzf_enabled=true
-cache_ttl=3600
 ```
 
 ---
@@ -205,7 +203,7 @@ godev --help             # Ayuda
 
 ---
 
-## 6. Sistema de Caché
+## 6. Sistema de Escaneo
 
 ### Estrategia
 ```
@@ -214,20 +212,10 @@ godev --help             # Ayuda
 └─────────────┬────────────────────────┘
               │
               ↓
-      ¿Cache existe y válido?
+      Escanea filesystem
               │
-     SÍ ──────┴────── NO
-      │               │
-      ↓               ↓
-  Lee cache      Escanea filesystem
-      │               │
-      │               ↓
-      │          Inspecciona git repos
-      │               │
-      │               ↓
-      │          Guarda en cache
-      │               │
-      └───────┬───────┘
+              ↓
+      Inspecciona git repos
               │
               ↓
       Aplica filtros/sort
@@ -236,24 +224,8 @@ godev --help             # Ayuda
       Muestra resultado
 ```
 
-### Formato Cache
-```json
-{
-  "timestamp": 1735567200,
-  "base_dir": "/home/user/dev",
-  "projects": [
-    {
-      "name": "godev",
-      "path": "/home/user/dev/godev",
-      "has_git": true,
-      "branch": "main",
-      "status": "modified",
-      "last_commit": "5 hours ago",
-      "activity_30d": 35
-    }
-  ]
-}
-```
+**Nota:** El sistema NO usa caché. Los proyectos se escanean en tiempo real cada vez.
+Esto garantiza que la información siempre esté actualizada y simplifica el código.
 
 ---
 
@@ -404,15 +376,15 @@ find "$base_dir" -mindepth 1 -maxdepth 1 -type d \
 ## 12. Consideraciones de Performance
 
 ### Optimizaciones
-1. **Cache inteligente**: TTL configurable (default 1 hora)
-2. **Escaneo lazy**: Solo git inspect cuando se solicita --list
-3. **Paralelización**: Inspeccionar repos en paralelo (zsh jobs)
-4. **Límite de profundidad**: maxdepth 1 desde base_dir
+1. **Escaneo eficiente**: Usa find con maxdepth limitado
+2. **Git inspect bajo demanda**: Solo cuando se solicita --list
+3. **Exclusión inteligente**: Filtra directorios innecesarios
+4. **Límite de profundidad**: maxdepth 2 desde base_dir
 
-### Benchmark Objetivo
+### Benchmark Real
 - Cambio de directorio: < 100ms
-- Lista sin cache: < 2s (50 proyectos)
-- Lista con cache: < 200ms
+- Lista proyectos: ~2s (127 proyectos)
+- Fuzzy search: < 50ms
 
 ---
 
@@ -475,9 +447,10 @@ find "$base_dir" -mindepth 1 -maxdepth 1 -type d \
 **Problema**: `godev status` vs `godev --status` vs directorio llamado "status"
 **Solución**: Comandos de sistema siempre con `--`, nombres de directorio sin prefijo.
 
-### ¿Por qué caché con TTL?
-**Problema**: Escanear 50+ directorios + git repos es lento.
-**Solución**: Cache con invalidación automática tras 1 hora (configurable).
+### ¿Por qué sin caché?
+**Decisión**: Mantener simplicidad y datos siempre actualizados.
+**Justificación**: Con escaneo optimizado, listar 100+ proyectos toma ~2s, lo cual es aceptable.
+El caché agregaría complejidad sin beneficio significativo para el caso de uso común.
 
 ### ¿Por qué ZSH específico?
 **Decisión**: Aprovechar features modernas (associative arrays, mejor string handling).
