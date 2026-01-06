@@ -3,7 +3,7 @@
 # godev - Development Directory Navigation Tool
 # Version: 1.0.0
 
-VERSION="2.2.1"
+VERSION="2.2.2"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/godev"
 CONFIG_FILE="$CONFIG_DIR/config"
 
@@ -234,8 +234,12 @@ get_git_info() {
     # Actividad últimos 30 días
     local activity=$(git -C "$project_dir" rev-list --count --since="30 days ago" HEAD 2>/dev/null)
     info[activity]="${activity:-0}"
+
+    # Remote URL
+    local remote_url=$(git -C "$project_dir" remote get-url origin 2>/dev/null)
+    info[remote]="${remote_url:-no_remote}"
     
-    echo "has_git:true|branch:${info[branch]}|status:${info[status]}|last_commit:${info[last_commit]}|last_commit_numeric:${info[last_commit_numeric]}|activity:${info[activity]}"
+    echo "has_git:true|branch:${info[branch]}|status:${info[status]}|last_commit:${info[last_commit]}|last_commit_numeric:${info[last_commit_numeric]}|activity:${info[activity]}|remote:${info[remote]}"
 }
 
 
@@ -436,6 +440,7 @@ navigate_to_project() {
 list_projects() {
     local simple_mode="$1"
     local sort_mode="$2"  # "name" (default) or "commit"
+    local show_remote="$3" # "true" or "false"
     load_config || return 1
 
     if [[ "$simple_mode" == "--simple" ]]; then
@@ -463,6 +468,7 @@ list_projects() {
         local branch=""
         local project_status=""
         local activity="0"
+        local remote=""
 
         if [[ "$has_git" == "true" ]]; then
             last_commit=$(echo "$git_raw" | grep -o "last_commit:[^|]*" | cut -d: -f2-)
@@ -470,6 +476,7 @@ list_projects() {
             branch=$(echo "$git_raw" | grep -o "branch:[^|]*" | cut -d: -f2)
             project_status=$(echo "$git_raw" | grep -o "status:[^|]*" | cut -d: -f2)
             activity=$(echo "$git_raw" | grep -o "activity:[^|]*" | cut -d: -f2)
+            local remote=$(echo "$git_raw" | grep -o "remote:[^|]*" | cut -d: -f2-)
 
             ((with_git++))
             if [[ "$project_status" == "modified" ]]; then
@@ -477,12 +484,14 @@ list_projects() {
             fi
         else
             last_commit="NO_GIT"
+            last_commit="NO_GIT"
             branch="N/A"
             project_status="N/A"
+            remote="N/A"
         fi
 
-        # Formato: name|has_git|last_commit|last_commit_numeric|branch|status|activity
-        projects_data+=("$name|$has_git|$last_commit|$last_commit_numeric|$branch|$project_status|$activity")
+        # Formato: name|has_git|last_commit|last_commit_numeric|branch|status|activity|remote
+        projects_data+=("$name|$has_git|$last_commit|$last_commit_numeric|$branch|$project_status|$activity|$remote")
         ((total++))
     done < <(scan_projects "$GODEV_BASE_DIR")
 
@@ -502,14 +511,23 @@ list_projects() {
 
     # Mostrar header
     echo ""
-    printf "${BOLD}%-45s %-20s %-15s %-12s %-15s${NC}\n" "PROJECT" "LAST COMMIT" "BRANCH" "STATUS" "ACTIVITY (30d)"
-    printf "%s\n" "──────────────────────────────────────────────────────────────────────────────────────────────────────────────"
+    if [[ "$show_remote" == "true" ]]; then
+        printf "${BOLD}%-40s %-20s %-15s %-12s %-15s %-40s${NC}\n" "PROJECT" "LAST COMMIT" "BRANCH" "STATUS" "ACTIVITY (30d)" "REMOTE"
+        printf "%s\n" "──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────"
+    else
+        printf "${BOLD}%-45s %-20s %-15s %-12s %-15s${NC}\n" "PROJECT" "LAST COMMIT" "BRANCH" "STATUS" "ACTIVITY (30d)"
+        printf "%s\n" "──────────────────────────────────────────────────────────────────────────────────────────────────────────────"
+    fi
 
     # Mostrar proyectos ordenados
     for project_line in "${sorted_projects[@]}"; do
-        IFS='|' read -r name has_git last_commit last_commit_numeric branch project_status activity <<< "$project_line"
+        IFS='|' read -r name has_git last_commit last_commit_numeric branch project_status activity remote <<< "$project_line"
 
-        printf "%-45s " "$name"
+        if [[ "$show_remote" == "true" ]]; then
+             printf "%-40s " "$name"
+        else
+             printf "%-45s " "$name"
+        fi
 
         if [[ "$has_git" == "true" ]]; then
             printf "%-20s " "$last_commit"
@@ -533,13 +551,27 @@ list_projects() {
                 bars="${GRAY}○○○${NC}"
             fi
 
-            printf "%b (%-3s)\n" "$bars" "$activity"
+            printf "%b (%-3s)" "$bars" "$activity"
+
+            if [[ "$show_remote" == "true" ]]; then
+                 printf " %-40s\n" "$remote"
+            else
+                 printf "\n"
+            fi
         else
-            printf "${GRAY}%-20s %-15s %-12s %-15s${NC}\n" "NO_GIT" "N/A" "N/A" "○○○"
+            if [[ "$show_remote" == "true" ]]; then
+                printf "${GRAY}%-20s %-15s %-12s %-15s %-40s${NC}\n" "NO_GIT" "N/A" "N/A" "○○○" ""
+            else
+                printf "${GRAY}%-20s %-15s %-12s %-15s${NC}\n" "NO_GIT" "N/A" "N/A" "○○○"
+            fi
         fi
     done
 
-    printf "%s\n" "──────────────────────────────────────────────────────────────────────────────────────────────────────────────"
+    if [[ "$show_remote" == "true" ]]; then
+        printf "%s\n" "──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────"
+    else
+        printf "%s\n" "──────────────────────────────────────────────────────────────────────────────────────────────────────────────"
+    fi
     echo ""
     echo "${BOLD}Summary:${NC}"
     echo "    Total projects: $total"
@@ -649,6 +681,7 @@ ${BOLD}LISTING:${NC}
     ${CYAN}godev --list${NC}            ${GRAY}# List ALL projects (alphabetical order)${NC}
     ${CYAN}godev -l${NC}                ${GRAY}# (short form)${NC}
     ${CYAN}godev --list --sort-by-commit${NC}  ${GRAY}# Sort by last commit (most recent first)${NC}
+    ${CYAN}godev --list --remote${NC}      ${GRAY}# Show remote URL in list${NC}
     ${CYAN}godev <pattern> -l${NC}      ${GRAY}# List projects matching pattern${NC}
 
 ${BOLD}OTHER COMMANDS:${NC}
@@ -661,6 +694,7 @@ ${BOLD}EXAMPLES:${NC}
     ${GREEN}godev web${NC}                 ${GRAY}# Navigate to "web" or selector if multiple${NC}
     ${GREEN}godev my-app${NC}              ${GRAY}# Go to my-app (or create if doesn't exist)${NC}
     ${GREEN}godev -l${NC}                  ${GRAY}# List all projects (alphabetical order)${NC}
+    ${GREEN}godev -l --remote${NC}         ${GRAY}# List with remote URLs${NC}
     ${GREEN}godev -l --sort-by-commit${NC} ${GRAY}# List by activity (most recent first)${NC}
     ${GREEN}godev web -l${NC}              ${GRAY}# List only projects with "web"${NC}
     ${GREEN}godev client -l${NC}           ${GRAY}# List projects for "client" folder${NC}
@@ -718,16 +752,23 @@ main() {
             ;;
         --list|-l)
             # Parsear opciones de ordenamiento
+            # Parsear opciones de ordenamiento
             local sort_mode="name"  # default
             local extra_arg=""
+            local show_remote="false"
 
-            if [[ "$2" == "--simple" ]]; then
-                extra_arg="--simple"
-            elif [[ "$2" == "--sort-by-commit" ]]; then
-                sort_mode="commit"
-            fi
+            # Check args 2 and 3 for flags
+            for arg in "$2" "$3"; do
+                if [[ "$arg" == "--simple" ]]; then
+                    extra_arg="--simple"
+                elif [[ "$arg" == "--sort-by-commit" ]]; then
+                    sort_mode="commit"
+                elif [[ "$arg" == "--remote" ]]; then
+                    show_remote="true"
+                fi
+            done
 
-            list_projects "$extra_arg" "$sort_mode"
+            list_projects "$extra_arg" "$sort_mode" "$show_remote"
             return $?
             ;;
         --update)
