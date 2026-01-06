@@ -3,7 +3,7 @@
 # godev - Development Directory Navigation Tool
 # Version: 1.0.0
 
-VERSION="2.1.11"
+VERSION="2.2.0"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/godev"
 CONFIG_FILE="$CONFIG_DIR/config"
 
@@ -211,15 +211,31 @@ get_git_info() {
     fi
     info[status]="$git_status"
     
-    # Último commit
-    local last_commit=$(git -C "$project_dir" log -1 --format="%ar" 2>/dev/null)
-    info[last_commit]="${last_commit:-never}"
+    # Último commit - calcular días transcurridos
+    local last_commit_timestamp=$(git -C "$project_dir" log -1 --format="%ct" 2>/dev/null)
+    local days_since="never"
+    local days_since_numeric=999999
+    if [[ -n "$last_commit_timestamp" ]]; then
+        local now=$(date +%s)
+        local diff=$((now - last_commit_timestamp))
+        days_since_numeric=$((diff / 86400))
+
+        if (( days_since_numeric == 0 )); then
+            days_since="hoy"
+        elif (( days_since_numeric == 1 )); then
+            days_since="1 día"
+        else
+            days_since="${days_since_numeric} días"
+        fi
+    fi
+    info[last_commit]="$days_since"
+    info[last_commit_numeric]="$days_since_numeric"
     
     # Actividad últimos 30 días
     local activity=$(git -C "$project_dir" rev-list --count --since="30 days ago" HEAD 2>/dev/null)
     info[activity]="${activity:-0}"
     
-    echo "has_git:true|branch:${info[branch]}|status:${info[status]}|last_commit:${info[last_commit]}|activity:${info[activity]}"
+    echo "has_git:true|branch:${info[branch]}|status:${info[status]}|last_commit:${info[last_commit]}|last_commit_numeric:${info[last_commit_numeric]}|activity:${info[activity]}"
 }
 
 
@@ -419,8 +435,9 @@ navigate_to_project() {
 
 list_projects() {
     local simple_mode="$1"
+    local sort_mode="$2"  # "name" (default) or "commit"
     load_config || return 1
-    
+
     if [[ "$simple_mode" == "--simple" ]]; then
         local clean_base="${GODEV_BASE_DIR%/}"
         scan_projects "$GODEV_BASE_DIR" | while read dir; do
@@ -428,43 +445,82 @@ list_projects() {
         done
         return 0
     fi
-    
-    # Parsear y mostrar
-    echo ""
-    printf "${BOLD}%-45s %-20s %-15s %-12s %-15s${NC}\n" "PROJECT" "LAST COMMIT" "BRANCH" "STATUS" "ACTIVITY (30d)"
-    printf "%s\n" "──────────────────────────────────────────────────────────────────────────────────────────────────────────────"
-    
+
     local total=0
     local with_git=0
     local modified=0
-    
     local clean_base="${GODEV_BASE_DIR%/}"
-    
+
+    # Recolectar todos los proyectos con su información
+    local -a projects_data
     while IFS= read -r project; do
         local name="${project#$clean_base/}"
         local git_raw=$(get_git_info "$project")
-        
-        # Parse git info from the "key:value|..." string returned by get_git_info
         local has_git=$(echo "$git_raw" | grep -o "has_git:[^|]*" | cut -d: -f2)
-        
-        printf "%-45s " "$name"
-        
+
+        local last_commit=""
+        local last_commit_numeric="999999"
+        local branch=""
+        local project_status=""
+        local activity="0"
+
         if [[ "$has_git" == "true" ]]; then
-            local last_commit=$(echo "$git_raw" | grep -o "last_commit:[^|]*" | cut -d: -f2)
-            local branch=$(echo "$git_raw" | grep -o "branch:[^|]*" | cut -d: -f2)
-            local project_status=$(echo "$git_raw" | grep -o "status:[^|]*" | cut -d: -f2)
-            local activity=$(echo "$git_raw" | grep -o "activity:[^|]*" | cut -d: -f2)
-            
+            last_commit=$(echo "$git_raw" | grep -o "last_commit:[^|]*" | cut -d: -f2-)
+            last_commit_numeric=$(echo "$git_raw" | grep -o "last_commit_numeric:[^|]*" | cut -d: -f2)
+            branch=$(echo "$git_raw" | grep -o "branch:[^|]*" | cut -d: -f2)
+            project_status=$(echo "$git_raw" | grep -o "status:[^|]*" | cut -d: -f2)
+            activity=$(echo "$git_raw" | grep -o "activity:[^|]*" | cut -d: -f2)
+
+            ((with_git++))
+            if [[ "$project_status" == "modified" ]]; then
+                ((modified++))
+            fi
+        else
+            last_commit="NO_GIT"
+            branch="N/A"
+            project_status="N/A"
+        fi
+
+        # Formato: name|has_git|last_commit|last_commit_numeric|branch|status|activity
+        projects_data+=("$name|$has_git|$last_commit|$last_commit_numeric|$branch|$project_status|$activity")
+        ((total++))
+    done < <(scan_projects "$GODEV_BASE_DIR")
+
+    # Ordenar según el modo
+    local -a sorted_projects
+    if [[ "$sort_mode" == "commit" ]]; then
+        # Ordenar por días desde último commit (columna 4)
+        while IFS= read -r line; do
+            sorted_projects+=("$line")
+        done < <(printf "%s\n" "${projects_data[@]}" | sort -t'|' -k4 -n)
+    else
+        # Ordenar alfabéticamente por nombre (columna 1) - default
+        while IFS= read -r line; do
+            sorted_projects+=("$line")
+        done < <(printf "%s\n" "${projects_data[@]}" | sort -t'|' -k1)
+    fi
+
+    # Mostrar header
+    echo ""
+    printf "${BOLD}%-45s %-20s %-15s %-12s %-15s${NC}\n" "PROJECT" "LAST COMMIT" "BRANCH" "STATUS" "ACTIVITY (30d)"
+    printf "%s\n" "──────────────────────────────────────────────────────────────────────────────────────────────────────────────"
+
+    # Mostrar proyectos ordenados
+    for project_line in "${sorted_projects[@]}"; do
+        IFS='|' read -r name has_git last_commit last_commit_numeric branch project_status activity <<< "$project_line"
+
+        printf "%-45s " "$name"
+
+        if [[ "$has_git" == "true" ]]; then
             printf "%-20s " "$last_commit"
             printf "${CYAN}%-15s${NC} " "$branch"
-            
+
             if [[ "$project_status" == "modified" ]]; then
                 printf "${YELLOW}● %-10s${NC} " "$project_status"
-                ((modified++))
             else
                 printf "${GREEN}✓ %-10s${NC} " "$project_status"
             fi
-            
+
             # Indicador de actividad
             local bars=""
             if (( activity > 20 )); then
@@ -476,16 +532,13 @@ list_projects() {
             else
                 bars="${GRAY}○○○${NC}"
             fi
-            
+
             printf "%b (%-3s)\n" "$bars" "$activity"
-            ((with_git++))
         else
             printf "${GRAY}%-20s %-15s %-12s %-15s${NC}\n" "NO_GIT" "N/A" "N/A" "○○○"
         fi
-        
-        ((total++))
-    done < <(scan_projects "$GODEV_BASE_DIR")
-    
+    done
+
     printf "%s\n" "──────────────────────────────────────────────────────────────────────────────────────────────────────────────"
     echo ""
     echo "${BOLD}Summary:${NC}"
@@ -526,7 +579,7 @@ list_projects_with_pattern() {
         printf "%-45s " "$name"
 
         if [[ "$has_git" == "true" ]]; then
-            local last_commit=$(echo "$git_raw" | grep -o "last_commit:[^|]*" | cut -d: -f2)
+            local last_commit=$(echo "$git_raw" | grep -o "last_commit:[^|]*" | cut -d: -f2-)
             local branch=$(echo "$git_raw" | grep -o "branch:[^|]*" | cut -d: -f2)
             local project_status=$(echo "$git_raw" | grep -o "status:[^|]*" | cut -d: -f2)
             local activity=$(echo "$git_raw" | grep -o "activity:[^|]*" | cut -d: -f2)
@@ -593,8 +646,9 @@ ${BOLD}NAVEGACIÓN:${NC}
     ${CYAN}godev <parcial>${NC}         ${GRAY}# Buscar y seleccionar si múltiples${NC}
 
 ${BOLD}LISTADO:${NC}
-    ${CYAN}godev --list${NC}            ${GRAY}# Listar TODOS los proyectos${NC}
+    ${CYAN}godev --list${NC}            ${GRAY}# Listar TODOS los proyectos (orden alfabético)${NC}
     ${CYAN}godev -l${NC}                ${GRAY}# (forma corta)${NC}
+    ${CYAN}godev --list --sort-by-commit${NC}  ${GRAY}# Ordenar por último commit (más reciente primero)${NC}
     ${CYAN}godev <pattern> -l${NC}      ${GRAY}# Listar proyectos que coincidan${NC}
 
 ${BOLD}OTROS COMANDOS:${NC}
@@ -606,7 +660,8 @@ ${BOLD}EJEMPLOS:${NC}
     ${GREEN}godev${NC}                     ${GRAY}# Selector interactivo de todos los proyectos${NC}
     ${GREEN}godev web${NC}                 ${GRAY}# Navega a "web" o selector si múltiples${NC}
     ${GREEN}godev my-app${NC}              ${GRAY}# Va a my-app (o lo crea si no existe)${NC}
-    ${GREEN}godev -l${NC}                  ${GRAY}# Lista todos los proyectos${NC}
+    ${GREEN}godev -l${NC}                  ${GRAY}# Lista todos los proyectos (orden alfabético)${NC}
+    ${GREEN}godev -l --sort-by-commit${NC} ${GRAY}# Lista por actividad (más reciente primero)${NC}
     ${GREEN}godev web -l${NC}              ${GRAY}# Lista solo proyectos con "web"${NC}
     ${GREEN}godev alithya -l${NC}          ${GRAY}# Lista proyectos del cliente "alithya"${NC}
 
@@ -663,7 +718,17 @@ main() {
             return $?
             ;;
         --list|-l)
-            list_projects "$2"
+            # Parsear opciones de ordenamiento
+            local sort_mode="name"  # default
+            local extra_arg=""
+
+            if [[ "$2" == "--simple" ]]; then
+                extra_arg="--simple"
+            elif [[ "$2" == "--sort-by-commit" ]]; then
+                sort_mode="commit"
+            fi
+
+            list_projects "$extra_arg" "$sort_mode"
             return $?
             ;;
         --update)
