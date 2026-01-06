@@ -4,7 +4,7 @@
 
 ### Navigate 100+ projects in seconds. Demystify your development tree.
 
-[![Version](https://img.shields.io/badge/version-2.1.11-blue.svg)](https://github.com/augustose/godev/releases)
+[![Version](https://img.shields.io/badge/version-2.2.0-blue.svg)](https://github.com/augustose/godev/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![ZSH](https://img.shields.io/badge/shell-ZSH-1f425f.svg)](https://www.zsh.org/)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey.svg)](#)
@@ -212,8 +212,9 @@ godev <project>           # Jump to project
 godev <partial-name>      # Fuzzy search with selection
 
 # Listing
-godev --list              # List ALL projects with Git stats
+godev --list              # List ALL projects with Git stats (alphabetical)
 godev -l                  # Short form
+godev --list --sort-by-commit  # Sort by last commit (most recent first)
 godev <pattern> -l        # List projects matching pattern
 
 # Other
@@ -248,27 +249,27 @@ $ godev --list
 
 PROJECT                    LAST COMMIT      BRANCH       STATUS       ACTIVITY (30d)
 ─────────────────────────────────────────────────────────────────────────────────────
-godev                     5 hours ago      main         ● modified   ●●● (35)
-webapp                    2 days ago       develop      ✓ clean      ●●○ (12)
-api-backend               1 week ago       main         ✓ clean      ●○○ (4)
-mobile-app                3 weeks ago      feature/auth ● modified   ○○○ (0)
+godev                     hoy              main         ● modified   ●●● (35)
+webapp                    2 días           develop      ✓ clean      ●●○ (12)
+api-backend               7 días           main         ✓ clean      ●○○ (4)
+mobile-app                21 días          feature/auth ● modified   ○○○ (0)
 ```
+
+**NEW in v2.2.0:** LAST COMMIT now shows in consistent day format. Sort by activity with `--sort-by-commit`.
 
 #### Example 2b: **NEW** - List Projects by Pattern
 
+Filter projects by name pattern with the `-l` flag:
+
 ```bash
-$ godev web -l
-
-Proyectos que coinciden con 'web':
-
-PROJECT                  LAST COMMIT      BRANCH       STATUS       ACTIVITY (30d)
-────────────────────────────────────────────────────────────────────────────────
-webapp                  2 hours ago      main         ● modified   ●●● (45)
-web-api                 1 day ago        develop      ✓ clean      ●●○ (12)
-website-redesign        3 days ago       feature/new  ✓ clean      ●○○ (3)
-
-Total: 3 proyecto(s)
+$ godev stud -l
 ```
+
+<div align="center">
+<img src="images/godev-l.png" alt="godev list with pattern filtering" width="800">
+</div>
+
+*Shows projects matching "stud" with Git status, branches, and activity. Notice the **LAST COMMIT** now displays in consistent day format (33 días, 31 días).*
 
 #### Example 3: Interactive Mode with FZF
 
@@ -525,14 +526,6 @@ zsh installer.sh
 # Test your changes
 ~/.local/bin/godev --version
 ```
-
----
-
-## 📚 Documentation
-
-- **Architecture** - See [architecture.md](architecture.md) for detailed design
-- **Testing** - See [testing_guide.md](testing_guide.md) for testing procedures
-- **Examples** - See [examples.md](examples.md) for more use cases
 
 ---
 
