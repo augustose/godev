@@ -49,5 +49,10 @@ build/
 # godev.sh
 # govap.sh
 
+# Development documentation (keep locally only)
 functional-specs.md
 CLAUDE.md
+
+# Screenshots and images (keep locally only)
+Screenshot*.png
+*.png
