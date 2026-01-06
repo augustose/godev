@@ -3,7 +3,7 @@
 # godev - Development Directory Navigation Tool
 # Version: 1.0.0
 
-VERSION="2.2.0"
+VERSION="2.2.1"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/godev"
 CONFIG_FILE="$CONFIG_DIR/config"
 
@@ -44,81 +44,81 @@ EXCLUDE_PATTERNS=(
 
 load_config() {
     if [[ ! -f "$CONFIG_FILE" ]]; then
-        echo "${RED}Error: Configuración no encontrada. Ejecuta: godev --setup${NC}" >&2
+        echo "${RED}Error: Configuration not found. Run: godev --setup${NC}" >&2
         return 1
     fi
-    
+
     local env_base_dir="$GODEV_BASE_DIR"
     source "$CONFIG_FILE"
     [[ -n "$env_base_dir" ]] && GODEV_BASE_DIR="$env_base_dir"
-    
+
     if [[ -z "$GODEV_BASE_DIR" ]]; then
-        echo "${RED}Error: GODEV_BASE_DIR no configurado${NC}" >&2
+        echo "${RED}Error: GODEV_BASE_DIR not configured${NC}" >&2
         return 1
     fi
-    
+
     if [[ ! -d "$GODEV_BASE_DIR" ]]; then
-        echo "${RED}Error: Directorio base no existe: $GODEV_BASE_DIR${NC}" >&2
+        echo "${RED}Error: Base directory does not exist: $GODEV_BASE_DIR${NC}" >&2
         return 1
     fi
-    
+
     return 0
 }
 
 setup_config() {
-    echo "${BOLD}${CYAN}🔧 Configuración de godev${NC}"
+    echo "${BOLD}${CYAN}🔧 godev Configuration${NC}"
     echo ""
-    
-    # Crear directorio de configuración
+
+    # Create configuration directory
     mkdir -p "$CONFIG_DIR"
-    
-    # Preguntar por directorio base
+
+    # Ask for base directory
     local default_base="$HOME/dev"
-    echo -n "Directorio base para proyectos [${default_base}]: "
+    echo -n "Projects base directory [${default_base}]: "
     read base_dir
     base_dir="${base_dir:-$default_base}"
-    
-    # Expandir ~ si está presente
+
+    # Expand ~ if present
     base_dir="${base_dir/#\~/$HOME}"
-    
-    # Crear directorio si no existe
+
+    # Create directory if it doesn't exist
     if [[ ! -d "$base_dir" ]]; then
-        echo -n "${YELLOW}El directorio no existe. ¿Crearlo? (s/N): ${NC}"
+        echo -n "${YELLOW}Directory doesn't exist. Create it? (y/N): ${NC}"
         read -k 1 create
         echo
-        if [[ "$create" =~ ^[sS]$ ]]; then
+        if [[ "$create" =~ ^[yY]$ ]]; then
             mkdir -p "$base_dir"
-            echo "${GREEN}✓ Directorio creado${NC}"
+            echo "${GREEN}✓ Directory created${NC}"
         else
-            echo "${RED}Abortado${NC}"
+            echo "${RED}Aborted${NC}"
             return 1
         fi
     fi
-    
-    # Verificar FZF
+
+    # Check for FZF
     local fzf_status="false"
     if command -v fzf &> /dev/null; then
         fzf_status="true"
-        echo "${GREEN}✓ FZF detectado${NC}"
+        echo "${GREEN}✓ FZF detected${NC}"
     else
-        echo "${YELLOW}⚠ FZF no detectado${NC}"
-        echo "  Se recomienda instalar FZF para mejor experiencia:"
+        echo "${YELLOW}⚠ FZF not detected${NC}"
+        echo "  FZF is recommended for better experience:"
         echo "  macOS: brew install fzf"
         echo "  Linux: sudo apt install fzf"
     fi
     
-    # Guardar configuración
+    # Save configuration
     cat > "$CONFIG_FILE" <<EOF
 # godev configuration
 GODEV_BASE_DIR="$base_dir"
 GODEV_FZF_ENABLED="$fzf_status"
 EOF
-    
+
     echo ""
-    echo "${GREEN}✓ Configuración guardada en: $CONFIG_FILE${NC}"
+    echo "${GREEN}✓ Configuration saved to: $CONFIG_FILE${NC}"
     echo ""
-    echo "${BOLD}Próximos pasos:${NC}"
-    echo "1. Asegúrate de tener esto en tu ~/.zshrc:"
+    echo "${BOLD}Next steps:${NC}"
+    echo "1. Make sure you have this in your ~/.zshrc:"
     echo ""
     echo "${CYAN}godev() {"
     echo "    local result"
@@ -136,8 +136,8 @@ EOF
     echo "    fi"
     echo "}${NC}"
     echo ""
-    echo "2. Ejecuta: source ~/.zshrc"
-    echo "3. Prueba: godev"
+    echo "2. Run: source ~/.zshrc"
+    echo "3. Test: godev"
     
     return 0
 }
@@ -283,42 +283,42 @@ find_project() {
             return 0
             ;;
         *)
-            # *** MÚLTIPLES MATCHES - MOSTRAR LISTA Y SELECCIONAR ***
+            # *** MULTIPLE MATCHES - SHOW LIST AND SELECT ***
             echo "" >&2
-            echo "${BOLD}${CYAN}Múltiples proyectos encontrados con '${search}':${NC}" >&2
+            echo "${BOLD}${CYAN}Multiple projects found matching '${search}':${NC}" >&2
             echo "" >&2
-            
-            # Usar FZF si está disponible
+
+            # Use FZF if available
             if command -v fzf &> /dev/null && [[ "$GODEV_FZF_ENABLED" == "true" ]]; then
                 local selected=$(printf '%s\n' "${matches[@]}" | fzf \
                     --height 50% \
                     --reverse \
                     --border rounded \
-                    --prompt "Selecciona proyecto > " \
-                    --header "↑↓ navega | Enter selecciona | Esc cancela" \
-                    --preview 'echo "📁 {}"; echo ""; if [[ -d "{}/.git" ]]; then echo "Git Info:"; git -C {} log -1 --pretty=format:"%Cgreen%h%Creset - %s %Cblue(%ar)%Creset" 2>/dev/null || echo "Sin commits"; echo ""; git -C {} status -s 2>/dev/null | head -5; else echo "❌ No es un repositorio git"; fi' \
+                    --prompt "Select project > " \
+                    --header "↑↓ navigate | Enter select | Esc cancel" \
+                    --preview 'echo "📁 {}"; echo ""; if [[ -d "{}/.git" ]]; then echo "Git Info:"; git -C {} log -1 --pretty=format:"%Cgreen%h%Creset - %s %Cblue(%ar)%Creset" 2>/dev/null || echo "No commits"; echo ""; git -C {} status -s 2>/dev/null | head -5; else echo "❌ Not a git repository"; fi' \
                     --preview-window right:50%:wrap \
                     --color "header:italic:cyan,prompt:bold:blue")
-                
+
                 if [[ -n "$selected" ]]; then
                     echo "" >&2
-                    echo "${GREEN}✓ Seleccionado: ${selected##*/}${NC}" >&2
+                    echo "${GREEN}✓ Selected: ${selected##*/}${NC}" >&2
                     echo "$selected"
                     return 0
                 else
                     echo "" >&2
-                    echo "${YELLOW}Selección cancelada${NC}" >&2
+                    echo "${YELLOW}Selection cancelled${NC}" >&2
                     return 1
                 fi
             else
-                # Sin FZF - mostrar lista numerada con más información
+                # Without FZF - show numbered list with more information
                 echo "${GRAY}┌─────────────────────────────────────────────────────────${NC}" >&2
                 local i=1
                 for match in "${matches[@]}"; do
                     local project_name="${match#$clean_base/}"
                     local git_info=""
-                    
-                    # Mostrar info de git si existe
+
+                    # Show git info if it exists
                     if [[ -d "$match/.git" ]]; then
                         local branch=$(git -C "$match" rev-parse --abbrev-ref HEAD 2>/dev/null)
                         local status="clean"
@@ -333,28 +333,28 @@ find_project() {
                     else
                         git_info="${GRAY}[no git]${NC}"
                     fi
-                    
+
                     printf "${BOLD}%2d)${NC} %-35s %b\n" "$i" "$project_name" "$git_info" >&2
                     ((i++))
                 done
                 echo "${GRAY}└─────────────────────────────────────────────────────────${NC}" >&2
                 echo "" >&2
-                echo -n "${BOLD}Selecciona un número (1-${#matches[@]}) o ${GRAY}Enter para cancelar${NC}: " >&2
+                echo -n "${BOLD}Select a number (1-${#matches[@]}) or ${GRAY}Enter to cancel${NC}: " >&2
                 read selection
-                
-                # Validar selección
+
+                # Validate selection
                 if [[ -z "$selection" ]]; then
                     echo "" >&2
-                    echo "${YELLOW}Selección cancelada${NC}" >&2
+                    echo "${YELLOW}Selection cancelled${NC}" >&2
                     return 1
                 elif [[ "$selection" =~ ^[0-9]+$ ]] && (( selection > 0 && selection <= ${#matches[@]} )); then
                     echo "" >&2
-                    echo "${GREEN}✓ Seleccionado: ${matches[$selection]#$clean_base/}${NC}" >&2
+                    echo "${GREEN}✓ Selected: ${matches[$selection]#$clean_base/}${NC}" >&2
                     echo "${matches[$selection]}"
                     return 0
                 else
                     echo "" >&2
-                    echo "${RED}✗ Selección inválida${NC}" >&2
+                    echo "${RED}✗ Invalid selection${NC}" >&2
                     return 1
                 fi
             fi
@@ -403,23 +403,23 @@ navigate_to_project() {
         project_path=$(find_project "$search" "$GODEV_BASE_DIR")
         local find_exit=$?
         
-        # Si find_project retornó error y no encontró nada
+        # If find_project returned error and found nothing
         if [[ $find_exit -ne 0 ]] && [[ -z "$project_path" ]]; then
             echo "" >&2
-            echo "${YELLOW}⚠ Proyecto '$search' no encontrado${NC}" >&2
+            echo "${YELLOW}⚠ Project '$search' not found${NC}" >&2
             echo "" >&2
-            echo -n "¿Crear nuevo proyecto '${BOLD}$search${NC}' en $GODEV_BASE_DIR? (${GREEN}s${NC}/${GRAY}N${NC}): " >&2
+            echo -n "Create new project '${BOLD}$search${NC}' in $GODEV_BASE_DIR? (${GREEN}y${NC}/${GRAY}N${NC}): " >&2
             read -k 1 create
             echo >&2
             echo "" >&2
-            
-            if [[ "$create" =~ ^[sS]$ ]]; then
+
+            if [[ "$create" =~ ^[yY]$ ]]; then
                 mkdir -p "$GODEV_BASE_DIR/$search"
-                echo "${GREEN}✓ Proyecto creado${NC}" >&2
+                echo "${GREEN}✓ Project created${NC}" >&2
                 echo "$GODEV_BASE_DIR/$search"
                 return 0
             else
-                echo "${GRAY}Operación cancelada${NC}" >&2
+                echo "${GRAY}Operation cancelled${NC}" >&2
                 return 1
             fi
         fi
@@ -554,7 +554,7 @@ list_projects_with_pattern() {
     load_config || return 1
 
     echo ""
-    echo "${BOLD}${CYAN}Proyectos que coinciden con '${search}':${NC}"
+    echo "${BOLD}${CYAN}Projects matching '${search}':${NC}"
     echo ""
 
     printf "${BOLD}%-45s %-20s %-15s %-12s %-15s${NC}\n" "PROJECT" "LAST COMMIT" "BRANCH" "STATUS" "ACTIVITY (30d)"
@@ -568,7 +568,7 @@ list_projects_with_pattern() {
     while IFS= read -r project; do
         local name="${project#$clean_base/}"
 
-        # Filtrar por pattern (case-insensitive)
+        # Filter by pattern (case-insensitive)
         if [[ ! "${name:l}" == *"${search:l}"* ]]; then
             continue
         fi
@@ -619,13 +619,13 @@ list_projects_with_pattern() {
 
     if [[ $total -eq 0 ]]; then
         echo ""
-        echo "${YELLOW}⚠ No se encontraron proyectos con '${search}'${NC}"
+        echo "${YELLOW}⚠ No projects found matching '${search}'${NC}"
         echo ""
         return 1
     fi
 
     echo ""
-    echo "${BOLD}Total: $total proyecto(s)${NC}"
+    echo "${BOLD}Total: $total project(s)${NC}"
     echo ""
     return 0
 }
@@ -640,48 +640,47 @@ ${BOLD}${CYAN}🚀 godev${NC} - Demystify Your Development Tree v${VERSION}
 
 ${BOLD}Navigate 100+ projects in seconds. Make sense of complexity.${NC}
 
-${BOLD}NAVEGACIÓN:${NC}
-    ${CYAN}godev${NC}                   ${GRAY}# Menú interactivo (FZF)${NC}
-    ${CYAN}godev <nombre>${NC}          ${GRAY}# Cambiar a proyecto${NC}
-    ${CYAN}godev <parcial>${NC}         ${GRAY}# Buscar y seleccionar si múltiples${NC}
+${BOLD}NAVIGATION:${NC}
+    ${CYAN}godev${NC}                   ${GRAY}# Interactive menu (FZF)${NC}
+    ${CYAN}godev <name>${NC}            ${GRAY}# Jump to project${NC}
+    ${CYAN}godev <partial>${NC}         ${GRAY}# Search and select if multiple matches${NC}
 
-${BOLD}LISTADO:${NC}
-    ${CYAN}godev --list${NC}            ${GRAY}# Listar TODOS los proyectos (orden alfabético)${NC}
-    ${CYAN}godev -l${NC}                ${GRAY}# (forma corta)${NC}
-    ${CYAN}godev --list --sort-by-commit${NC}  ${GRAY}# Ordenar por último commit (más reciente primero)${NC}
-    ${CYAN}godev <pattern> -l${NC}      ${GRAY}# Listar proyectos que coincidan${NC}
+${BOLD}LISTING:${NC}
+    ${CYAN}godev --list${NC}            ${GRAY}# List ALL projects (alphabetical order)${NC}
+    ${CYAN}godev -l${NC}                ${GRAY}# (short form)${NC}
+    ${CYAN}godev --list --sort-by-commit${NC}  ${GRAY}# Sort by last commit (most recent first)${NC}
+    ${CYAN}godev <pattern> -l${NC}      ${GRAY}# List projects matching pattern${NC}
 
-${BOLD}OTROS COMANDOS:${NC}
-    ${CYAN}--setup${NC}                 ${GRAY}# Configurar/reconfigurar godev${NC}
-    ${CYAN}--version, -v${NC}           ${GRAY}# Mostrar versión${NC}
-    ${CYAN}--help, -h${NC}              ${GRAY}# Mostrar esta ayuda${NC}
+${BOLD}OTHER COMMANDS:${NC}
+    ${CYAN}--setup${NC}                 ${GRAY}# Configure/reconfigure godev${NC}
+    ${CYAN}--version, -v${NC}           ${GRAY}# Show version${NC}
+    ${CYAN}--help, -h${NC}              ${GRAY}# Show this help${NC}
 
-${BOLD}EJEMPLOS:${NC}
-    ${GREEN}godev${NC}                     ${GRAY}# Selector interactivo de todos los proyectos${NC}
-    ${GREEN}godev web${NC}                 ${GRAY}# Navega a "web" o selector si múltiples${NC}
-    ${GREEN}godev my-app${NC}              ${GRAY}# Va a my-app (o lo crea si no existe)${NC}
-    ${GREEN}godev -l${NC}                  ${GRAY}# Lista todos los proyectos (orden alfabético)${NC}
-    ${GREEN}godev -l --sort-by-commit${NC} ${GRAY}# Lista por actividad (más reciente primero)${NC}
-    ${GREEN}godev web -l${NC}              ${GRAY}# Lista solo proyectos con "web"${NC}
-    ${GREEN}godev alithya -l${NC}          ${GRAY}# Lista proyectos del cliente "alithya"${NC}
+${BOLD}EXAMPLES:${NC}
+    ${GREEN}godev${NC}                     ${GRAY}# Interactive selector for all projects${NC}
+    ${GREEN}godev web${NC}                 ${GRAY}# Navigate to "web" or selector if multiple${NC}
+    ${GREEN}godev my-app${NC}              ${GRAY}# Go to my-app (or create if doesn't exist)${NC}
+    ${GREEN}godev -l${NC}                  ${GRAY}# List all projects (alphabetical order)${NC}
+    ${GREEN}godev -l --sort-by-commit${NC} ${GRAY}# List by activity (most recent first)${NC}
+    ${GREEN}godev web -l${NC}              ${GRAY}# List only projects with "web"${NC}
+    ${GREEN}godev client -l${NC}           ${GRAY}# List projects for "client" folder${NC}
 
-${BOLD}CARACTERÍSTICAS:${NC}
-    ${GREEN}✓${NC} Búsqueda fuzzy inteligente
-    ${GREEN}✓${NC} Integración con FZF para mejor UX
-    ${GREEN}✓${NC} Información Git detallada
-    ${GREEN}✓${NC} Información Git detallada
-    ${GREEN}✓${NC} Seguimiento de actividad (30 días)
-    ${GREEN}✓${NC} Selección múltiple automática
+${BOLD}FEATURES:${NC}
+    ${GREEN}✓${NC} Smart fuzzy search
+    ${GREEN}✓${NC} FZF integration for better UX
+    ${GREEN}✓${NC} Detailed Git information
+    ${GREEN}✓${NC} Activity tracking (30 days)
+    ${GREEN}✓${NC} Automatic multi-selection
 
-${BOLD}CONFIGURACIÓN:${NC}
-    Archivo: ${CYAN}${CONFIG_FILE}${NC}
-    
-${BOLD}RECOMENDACIÓN:${NC}
-    Instala FZF para experiencia premium: ${CYAN}brew install fzf${NC}
+${BOLD}CONFIGURATION:${NC}
+    File: ${CYAN}${CONFIG_FILE}${NC}
 
-${BOLD}MÁS INFO:${NC}
+${BOLD}RECOMMENDATION:${NC}
+    Install FZF for premium experience: ${CYAN}brew install fzf${NC}
+
+${BOLD}MORE INFO:${NC}
     GitHub: ${CYAN}https://github.com/augustose/godev${NC}
-    Docs: ${CYAN}README.md, architecture.md, testing_guide.md${NC}
+    Docs: ${CYAN}README.md${NC}
 
 ${GRAY}Made with ❤️  for developers who value their time${NC}
 
@@ -699,7 +698,7 @@ show_version() {
 main() {
     # Verificar que estamos en ZSH
     if [[ -z "$ZSH_VERSION" ]]; then
-        echo "${RED}Error: Este script requiere ZSH${NC}" >&2
+        echo "${RED}Error: This script requires ZSH${NC}" >&2
         return 1
     fi
     
