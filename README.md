@@ -21,7 +21,7 @@
 
 Managing dozens or hundreds of development projects is chaos:
 
-```bash
+```zsh
 # The old way 😫
 cd ~/dev
 ls
@@ -37,16 +37,16 @@ pwd
 
 ## ✨ The Solution
 
-```bash
+```zsh
 # The godev way 🚀
 godev web
 ```
 
 **Instant results** with beautiful, interactive selection:
 
-<div align="center">
+<div align="left">
 
-```
+```zsh
 ┌─────────────────────────────────────────────────────────
  1) webapp                [main - ✓]         ●●● (45 commits)
  2) web-api               [develop - ●]      ●●○ (12 commits)
@@ -68,13 +68,13 @@ Selecciona: 1
 
 ### One-line installation
 
-```bash
+```zsh
 curl -fsSL https://raw.githubusercontent.com/augustose/godev/main/installer.sh | zsh
 ```
 
 That's it! Start using immediately:
 
-```bash
+```zsh
 godev                # Interactive fuzzy finder
 godev myproject      # Jump to project instantly
 godev --list         # See all projects with Git info
@@ -136,7 +136,7 @@ godev integrates seamlessly with [**junegunn/fzf**](https://github.com/junegunn/
 
 ### Automatic (Recommended)
 
-```bash
+```zsh
 curl -fsSL https://raw.githubusercontent.com/augustose/godev/main/installer.sh | zsh
 ```
 
@@ -152,13 +152,15 @@ curl -fsSL https://raw.githubusercontent.com/augustose/godev/main/installer.sh |
 <details>
 <summary>Click to expand manual installation steps</summary>
 
-```bash
-# 1. Download the script
+1. Download the script
+```zsh
 mkdir -p ~/.local/bin
 curl -fsSL https://raw.githubusercontent.com/augustose/godev/main/godev -o ~/.local/bin/godev
 chmod +x ~/.local/bin/godev
+```
 
-# 2. Add wrapper function to ~/.zshrc
+2. Add wrapper function to ~/.zshrc
+```zsh
 cat >> ~/.zshrc << 'EOF'
 
 # godev - Function wrapper
@@ -178,8 +180,10 @@ godev() {
     fi
 }
 EOF
+```
 
-# 3. Reload and configure
+3. Reload and configure
+```zsh
 source ~/.zshrc
 godev --setup
 ```
@@ -188,7 +192,7 @@ godev --setup
 
 ### Installing FZF (Optional but Recommended)
 
-```bash
+```zsh
 # macOS
 brew install fzf
 
@@ -205,7 +209,7 @@ sudo dnf install fzf
 
 ### Basic Commands
 
-```bash
+```zsh
 # Navigation
 godev                     # Interactive fuzzy finder (with FZF)
 godev <project>           # Jump to project
@@ -227,7 +231,7 @@ godev --help, -h          # Show help
 
 #### Example 1: Quick Navigation
 
-```bash
+```zsh
 $ godev react
 
 Múltiples proyectos encontrados con 'react':
@@ -242,7 +246,7 @@ Selecciona: 2
 
 #### Example 2: List All Projects
 
-```bash
+```zsh
 $ godev -l
 # or
 $ godev --list
@@ -261,7 +265,7 @@ mobile-app                21 días          feature/auth ● modified   ○○�
 
 Filter projects by name pattern with the `-l` flag:
 
-```bash
+```zsh
 $ godev stud -l
 ```
 
@@ -273,7 +277,7 @@ $ godev stud -l
 
 #### Example 3: Interactive Mode with FZF
 
-```bash
+```zsh
 $ godev
 
 # Opens beautiful FZF interface with:
@@ -285,7 +289,7 @@ $ godev
 
 #### Example 4: Create New Project
 
-```bash
+```zsh
 $ godev my-new-project
 
 ⚠ Proyecto 'my-new-project' no encontrado
@@ -318,7 +322,7 @@ godev shows rich Git information for each project:
 
 Edit `~/.config/godev/config`:
 
-```bash
+```zsh
 GODEV_BASE_DIR="/home/user/dev"    # Your projects directory
 GODEV_FZF_ENABLED="true"            # Enable FZF integration
 ```
@@ -331,7 +335,7 @@ GODEV_FZF_ENABLED="true"            # Enable FZF integration
 
 **NEW:** Use the `-l` flag with a pattern for built-in filtering:
 
-```bash
+```zsh
 # List projects matching pattern
 godev web -l              # Projects with "web"
 godev api -l              # Projects with "api"
@@ -344,7 +348,7 @@ godev webapp              # Then navigate to it
 
 You can also use `grep` for more complex filtering:
 
-```bash
+```zsh
 # Only Git repositories
 godev -l | grep -v "NO_GIT"
 
@@ -357,7 +361,7 @@ godev -l | grep -v "NO_GIT" | grep "modified"
 
 ### Combine with Other Tools
 
-```bash
+```zsh
 # Open in VS Code after navigating
 godev webapp && code .
 
@@ -446,17 +450,17 @@ Works great with:
 <summary><strong>Command not found: godev</strong></summary>
 
 1. Check installation:
-```bash
+```zsh
 ls -la ~/.local/bin/godev
 ```
 
 2. Check PATH:
-```bash
+```zsh
 echo $PATH | grep ".local/bin"
 ```
 
 3. Reload shell:
-```bash
+```zsh
 source ~/.zshrc
 ```
 </details>
@@ -465,12 +469,12 @@ source ~/.zshrc
 <summary><strong>godev doesn't change directory</strong></summary>
 
 You need the wrapper function in `~/.zshrc`. Run:
-```bash
+```zsh
 godev --setup
 ```
 
 Or reinstall:
-```bash
+```zsh
 curl -fsSL https://raw.githubusercontent.com/augustose/godev/main/installer.sh | zsh
 ```
 </details>
@@ -479,13 +483,13 @@ curl -fsSL https://raw.githubusercontent.com/augustose/godev/main/installer.sh |
 <summary><strong>FZF not working</strong></summary>
 
 Install FZF:
-```bash
+```zsh
 brew install fzf  # macOS
 sudo apt install fzf  # Ubuntu
 ```
 
 Then reconfigure:
-```bash
+```zsh
 godev --setup
 ```
 </details>
@@ -514,7 +518,7 @@ Contributions are welcome! Here's how:
 
 ### Development Setup
 
-```bash
+```zsh
 # Clone repo
 git clone https://github.com/augustose/godev.git
 cd godev
