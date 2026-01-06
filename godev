@@ -3,7 +3,7 @@
 # godev - Development Directory Navigation Tool
 # Version: 1.0.0
 
-VERSION="2.2.2"
+VERSION="2.2.3"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/godev"
 CONFIG_FILE="$CONFIG_DIR/config"
 
@@ -583,14 +583,20 @@ list_projects() {
 
 list_projects_with_pattern() {
     local search="$1"
+    local show_remote="$2" # "true" or "false"
     load_config || return 1
 
     echo ""
     echo "${BOLD}${CYAN}Projects matching '${search}':${NC}"
     echo ""
 
-    printf "${BOLD}%-45s %-20s %-15s %-12s %-15s${NC}\n" "PROJECT" "LAST COMMIT" "BRANCH" "STATUS" "ACTIVITY (30d)"
-    printf "%s\n" "────────────────────────────────────────────────────────────────────────────────────────────────────"
+    if [[ "$show_remote" == "true" ]]; then
+        printf "${BOLD}%-40s %-20s %-15s %-12s %-15s %-40s${NC}\n" "PROJECT" "LAST COMMIT" "BRANCH" "STATUS" "ACTIVITY (30d)" "REMOTE"
+        printf "%s\n" "──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────"
+    else
+        printf "${BOLD}%-45s %-20s %-15s %-12s %-15s${NC}\n" "PROJECT" "LAST COMMIT" "BRANCH" "STATUS" "ACTIVITY (30d)"
+        printf "%s\n" "────────────────────────────────────────────────────────────────────────────────────────────────────"
+    fi
 
     local total=0
     local with_git=0
@@ -607,8 +613,13 @@ list_projects_with_pattern() {
 
         local git_raw=$(get_git_info "$project")
         local has_git=$(echo "$git_raw" | grep -o "has_git:[^|]*" | cut -d: -f2)
+        local remote=$(echo "$git_raw" | grep -o "remote:[^|]*" | cut -d: -f2-)
 
-        printf "%-45s " "$name"
+        if [[ "$show_remote" == "true" ]]; then
+             printf "%-40s " "$name"
+        else
+             printf "%-45s " "$name"
+        fi
 
         if [[ "$has_git" == "true" ]]; then
             local last_commit=$(echo "$git_raw" | grep -o "last_commit:[^|]*" | cut -d: -f2-)
@@ -638,16 +649,30 @@ list_projects_with_pattern() {
                 bars="${GRAY}○○○${NC}"
             fi
 
-            printf "%b (%-3s)\n" "$bars" "$activity"
+            printf "%b (%-3s)" "$bars" "$activity"
+
+            if [[ "$show_remote" == "true" ]]; then
+                 printf " %-40s\n" "$remote"
+            else
+                 printf "\n"
+            fi
             ((with_git++))
         else
-            printf "${GRAY}%-20s %-15s %-12s %-15s${NC}\n" "NO_GIT" "N/A" "N/A" "○○○"
+            if [[ "$show_remote" == "true" ]]; then
+                printf "${GRAY}%-20s %-15s %-12s %-15s %-40s${NC}\n" "NO_GIT" "N/A" "N/A" "○○○" ""
+            else
+                printf "${GRAY}%-20s %-15s %-12s %-15s${NC}\n" "NO_GIT" "N/A" "N/A" "○○○"
+            fi
         fi
 
         ((total++))
     done < <(scan_projects "$GODEV_BASE_DIR")
 
-    printf "%s\n" "────────────────────────────────────────────────────────────────────────────────────────────────────"
+    if [[ "$show_remote" == "true" ]]; then
+        printf "%s\n" "──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────"
+    else
+        printf "%s\n" "────────────────────────────────────────────────────────────────────────────────────────────────────"
+    fi
 
     if [[ $total -eq 0 ]]; then
         echo ""
@@ -778,7 +803,11 @@ main() {
         *)
             # Verificar si el segundo argumento es -l (listar con pattern)
             if [[ "$2" == "-l" ]]; then
-                list_projects_with_pattern "$1"
+                local show_remote="false"
+                if [[ "$3" == "--remote" ]]; then
+                    show_remote="true"
+                fi
+                list_projects_with_pattern "$1" "$show_remote"
                 return $?
             fi
 
