@@ -46,7 +46,7 @@ if [[ -x "$GODEV_SCRIPT" ]]; then
     CURRENT_VERSION=$(~/.local/bin/godev --version 2>/dev/null | grep -o '[0-9.]*' || echo "desconocida")
     echo "${YELLOW}⚠ godev ya está instalado (versión $CURRENT_VERSION)${NC}"
     echo -n "¿Actualizar/reinstalar? (s/N): "
-    read -k 1 reinstall
+    read -k 1 reinstall < /dev/tty
     echo
     echo ""
     if [[ ! "$reinstall" =~ ^[sS]$ ]]; then
@@ -76,7 +76,7 @@ else
     echo "  • Fedora: ${CYAN}sudo dnf install fzf${NC}"
     echo ""
     echo -n "¿Continuar sin FZF? (s/N): "
-    read -k 1 continue
+    read -k 1 continue < /dev/tty
     echo
     if [[ ! "$continue" =~ ^[sS]$ ]]; then
         echo "${YELLOW}Instalación cancelada. Instala FZF y vuelve a intentar.${NC}"
@@ -161,7 +161,7 @@ echo "${CYAN}[7/10]${NC} Configurando función wrapper en ZSH..."
 if grep -q "^godev()" "$ZSHRC" 2>/dev/null; then
     echo "${YELLOW}⚠ La función godev ya existe en ~/.zshrc${NC}"
     echo -n "  ¿Reemplazar? (s/N): "
-    read -k 1 replace
+    read -k 1 replace < /dev/tty
     echo
     
     if [[ "$replace" =~ ^[sS]$ ]]; then
@@ -231,14 +231,14 @@ echo ""
 # Preguntar directorio base
 local default_base="$HOME/dev"
 echo -n "Directorio base para proyectos [${CYAN}${default_base}${NC}]: "
-read base_dir
+read base_dir < /dev/tty
 base_dir="${base_dir:-$default_base}"
 base_dir="${base_dir/#\~/$HOME}"
 
 # Crear si no existe
 if [[ ! -d "$base_dir" ]]; then
     echo -n "El directorio no existe. ¿Crearlo? (S/n): "
-    read -k 1 create
+    read -k 1 create < /dev/tty
     echo
     if [[ ! "$create" =~ ^[nN]$ ]]; then
         mkdir -p "$base_dir"
