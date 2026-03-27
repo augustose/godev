@@ -3,7 +3,7 @@
 # godev - Development Directory Navigation Tool
 # Version: 1.0.0
 
-VERSION="2.3.0"
+VERSION="2.4.0"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/godev"
 CONFIG_FILE="$CONFIG_DIR/config"
 
@@ -701,6 +701,79 @@ list_projects_with_pattern() {
     return 0
 }
 
+tree_projects() {
+    local search="$1"
+    load_config || return 1
+
+    local clean_base="${GODEV_BASE_DIR%/}"
+    local -a matched_dirs
+
+    while IFS= read -r project; do
+        local name="${project#$clean_base/}"
+        if [[ -n "$search" ]] && [[ ! "${name:l}" == *"${search:l}"* ]]; then
+            continue
+        fi
+        matched_dirs+=("$project")
+    done < <(scan_projects "$GODEV_BASE_DIR")
+
+    if [[ ${#matched_dirs[@]} -eq 0 ]]; then
+        echo ""
+        echo "${YELLOW}⚠ No projects found${search:+ matching '$search'}${NC}"
+        echo ""
+        return 1
+    fi
+
+    # Build a temp directory structure with symlinks for tree display
+    local tmpdir=$(mktemp -d)
+    for dir in "${matched_dirs[@]}"; do
+        local rel="${dir#$clean_base/}"
+        local parent="${tmpdir}/${rel%/*}"
+        if [[ "$rel" == */* ]]; then
+            mkdir -p "$parent"
+            ln -s "$dir" "$tmpdir/$rel" 2>/dev/null
+        else
+            ln -s "$dir" "$tmpdir/$rel" 2>/dev/null
+        fi
+    done
+
+    echo ""
+    if [[ -n "$search" ]]; then
+        echo "${BOLD}${CYAN}Projects matching '${search}':${NC}"
+    else
+        echo "${BOLD}${CYAN}Project tree:${NC}"
+    fi
+    echo "${BOLD}${clean_base}${NC}"
+
+    if command -v tree &> /dev/null; then
+        tree -C -L 2 --dirsfirst -I '.git' "$tmpdir" | tail -n +2
+    else
+        # Fallback without tree command
+        local prev_group=""
+        for dir in "${matched_dirs[@]}"; do
+            local rel="${dir#$clean_base/}"
+            if [[ "$rel" == */* ]]; then
+                local group="${rel%%/*}"
+                local leaf="${rel#*/}"
+                if [[ "$group" != "$prev_group" ]]; then
+                    echo "${CYAN}├── ${group}/${NC}"
+                    prev_group="$group"
+                fi
+                echo "${GRAY}│   ├── ${NC}${leaf}"
+            else
+                echo "${CYAN}├── ${rel}${NC}"
+            fi
+        done
+        echo "${CYAN}└──${NC}"
+    fi
+
+    echo ""
+    echo "${BOLD}Total: ${#matched_dirs[@]} project(s)${NC}"
+    echo ""
+
+    rm -rf "$tmpdir"
+    return 0
+}
+
 # ============================================================================
 # COMANDOS PRINCIPALES
 # ============================================================================
@@ -722,7 +795,10 @@ ${BOLD}LISTING:${NC}
     ${CYAN}godev --list --sort-by-commit${NC}  ${GRAY}# Sort by last commit (most recent first)${NC}
     ${CYAN}godev --list --remote${NC}      ${GRAY}# Show remote URL in list${NC}
     ${CYAN}godev --list --depth N${NC}     ${GRAY}# Override search depth (default: 3)${NC}
+    ${CYAN}godev --list --tree${NC}       ${GRAY}# Show projects in tree format${NC}
+    ${CYAN}godev -l -t${NC}              ${GRAY}# (short form)${NC}
     ${CYAN}godev <pattern> -l${NC}      ${GRAY}# List projects matching pattern${NC}
+    ${CYAN}godev <pattern> -l -t${NC}   ${GRAY}# Tree view filtered by pattern${NC}
 
 ${BOLD}OTHER COMMANDS:${NC}
     ${CYAN}--setup${NC}                 ${GRAY}# Configure/reconfigure godev${NC}
@@ -791,24 +867,27 @@ main() {
             return $?
             ;;
         --list|-l)
-            # Parsear opciones de ordenamiento
-            # Parsear opciones de ordenamiento
-            local sort_mode="name"  # default
+            local sort_mode="name"
             local extra_arg=""
             local show_remote="false"
+            local show_tree="false"
 
-            # Check remaining args for flags
             shift
             while [[ $# -gt 0 ]]; do
                 case "$1" in
                     --simple) extra_arg="--simple" ;;
                     --sort-by-commit) sort_mode="commit" ;;
                     --remote) show_remote="true" ;;
+                    --tree|-t) show_tree="true" ;;
                     --depth) shift; export GODEV_MAX_DEPTH="$1" ;;
                 esac
                 shift
             done
 
+            if [[ "$show_tree" == "true" ]]; then
+                tree_projects ""
+                return $?
+            fi
             list_projects "$extra_arg" "$sort_mode" "$show_remote"
             return $?
             ;;
@@ -821,16 +900,22 @@ main() {
             local search_term="$1"
             local is_list="false"
             local show_remote="false"
+            local show_tree="false"
             shift
             while [[ $# -gt 0 ]]; do
                 case "$1" in
                     -l) is_list="true" ;;
                     --remote) show_remote="true" ;;
+                    --tree|-t) show_tree="true" ;;
                     --depth) shift; export GODEV_MAX_DEPTH="$1" ;;
                 esac
                 shift
             done
 
+            if [[ "$show_tree" == "true" ]]; then
+                tree_projects "$search_term"
+                return $?
+            fi
             if [[ "$is_list" == "true" ]]; then
                 list_projects_with_pattern "$search_term" "$show_remote"
                 return $?
