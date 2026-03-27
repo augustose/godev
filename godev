@@ -3,7 +3,7 @@
 # godev - Development Directory Navigation Tool
 # Version: 1.0.0
 
-VERSION="2.2.3"
+VERSION="2.3.0"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/godev"
 CONFIG_FILE="$CONFIG_DIR/config"
 
@@ -95,6 +95,18 @@ setup_config() {
         fi
     fi
 
+    # Ask for max depth
+    local default_depth="3"
+    echo -n "Max search depth [${default_depth}]: "
+    read max_depth
+    max_depth="${max_depth:-$default_depth}"
+
+    # Validate numeric input
+    if [[ ! "$max_depth" =~ ^[0-9]+$ ]] || (( max_depth < 1 || max_depth > 10 )); then
+        echo "${YELLOW}⚠ Invalid depth. Using default: ${default_depth}${NC}"
+        max_depth="$default_depth"
+    fi
+
     # Check for FZF
     local fzf_status="false"
     if command -v fzf &> /dev/null; then
@@ -112,6 +124,7 @@ setup_config() {
 # godev configuration
 GODEV_BASE_DIR="$base_dir"
 GODEV_FZF_ENABLED="$fzf_status"
+GODEV_MAX_DEPTH="$max_depth"
 EOF
 
     echo ""
@@ -183,7 +196,8 @@ scan_projects() {
         fi
         
         projects+=("$dir")
-    done < <(find "$base_dir" -mindepth 1 -maxdepth 2 -type d 2>/dev/null | sort)
+    local max_depth="${GODEV_MAX_DEPTH:-3}"
+    done < <(find "$base_dir" -mindepth 1 -maxdepth "$max_depth" -type d 2>/dev/null | sort)
     
     printf "%s\n" "${projects[@]}"
 }
@@ -707,6 +721,7 @@ ${BOLD}LISTING:${NC}
     ${CYAN}godev -l${NC}                ${GRAY}# (short form)${NC}
     ${CYAN}godev --list --sort-by-commit${NC}  ${GRAY}# Sort by last commit (most recent first)${NC}
     ${CYAN}godev --list --remote${NC}      ${GRAY}# Show remote URL in list${NC}
+    ${CYAN}godev --list --depth N${NC}     ${GRAY}# Override search depth (default: 3)${NC}
     ${CYAN}godev <pattern> -l${NC}      ${GRAY}# List projects matching pattern${NC}
 
 ${BOLD}OTHER COMMANDS:${NC}
@@ -782,15 +797,16 @@ main() {
             local extra_arg=""
             local show_remote="false"
 
-            # Check args 2 and 3 for flags
-            for arg in "$2" "$3"; do
-                if [[ "$arg" == "--simple" ]]; then
-                    extra_arg="--simple"
-                elif [[ "$arg" == "--sort-by-commit" ]]; then
-                    sort_mode="commit"
-                elif [[ "$arg" == "--remote" ]]; then
-                    show_remote="true"
-                fi
+            # Check remaining args for flags
+            shift
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --simple) extra_arg="--simple" ;;
+                    --sort-by-commit) sort_mode="commit" ;;
+                    --remote) show_remote="true" ;;
+                    --depth) shift; export GODEV_MAX_DEPTH="$1" ;;
+                esac
+                shift
             done
 
             list_projects "$extra_arg" "$sort_mode" "$show_remote"
@@ -801,18 +817,27 @@ main() {
             return 0
             ;;
         *)
-            # Verificar si el segundo argumento es -l (listar con pattern)
-            if [[ "$2" == "-l" ]]; then
-                local show_remote="false"
-                if [[ "$3" == "--remote" ]]; then
-                    show_remote="true"
-                fi
-                list_projects_with_pattern "$1" "$show_remote"
+            # Check for flags after the search term
+            local search_term="$1"
+            local is_list="false"
+            local show_remote="false"
+            shift
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    -l) is_list="true" ;;
+                    --remote) show_remote="true" ;;
+                    --depth) shift; export GODEV_MAX_DEPTH="$1" ;;
+                esac
+                shift
+            done
+
+            if [[ "$is_list" == "true" ]]; then
+                list_projects_with_pattern "$search_term" "$show_remote"
                 return $?
             fi
 
             # Navegación normal
-            navigate_to_project "$1"
+            navigate_to_project "$search_term"
             return $?
             ;;
     esac
