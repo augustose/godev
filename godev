@@ -3,7 +3,7 @@
 # godev - Development Directory Navigation Tool
 # Version: 1.0.0
 
-VERSION="2.4.0"
+VERSION="2.4.1"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/godev"
 CONFIG_FILE="$CONFIG_DIR/config"
 
@@ -164,39 +164,55 @@ scan_projects() {
     local -a projects
     
     local -A git_projects
-    
+    local max_depth="${GODEV_MAX_DEPTH:-3}"
+
     while IFS= read -r dir; do
         local dir_name="${dir##*/}"
-        
-        # 1. Skip hidden directories
+
+        # 1. Skip hidden directories (check leaf name)
         if [[ "$dir_name" == .* ]]; then
             continue
         fi
-        
-        # 2. Check exclusion patterns
-        local exclude=0
-        for pattern in "${EXCLUDE_PATTERNS[@]}"; do
-            if [[ "$dir_name" == $pattern ]]; then
-                exclude=1
+
+        # 2. Check if any path component is hidden or excluded
+        local rel_path="${dir#$base_dir/}"
+        local skip_path=0
+        local IFS_SAVE="$IFS"
+        IFS='/'
+        for component in ${=rel_path}; do
+            if [[ "$component" == .* ]]; then
+                skip_path=1
                 break
             fi
+            for pattern in "${EXCLUDE_PATTERNS[@]}"; do
+                if [[ "$component" == $pattern ]]; then
+                    skip_path=1
+                    break 2
+                fi
+            done
         done
-        [[ $exclude -eq 1 ]] && continue
-        
-        # 3. Check if parent is a known git project
+        IFS="$IFS_SAVE"
+        [[ $skip_path -eq 1 ]] && continue
+
+        # 3. Check if any ancestor is a known git project
         # This prevents listing subdirectories of a git repo
-        local parent_dir="${dir%/*}"
-        if [[ -n "${git_projects[$parent_dir]}" ]]; then
-            continue
-        fi
-        
+        local check_dir="${dir%/*}"
+        local is_child=0
+        while [[ "$check_dir" != "$base_dir" && "$check_dir" != "/" ]]; do
+            if [[ -n "${git_projects[$check_dir]}" ]]; then
+                is_child=1
+                break
+            fi
+            check_dir="${check_dir%/*}"
+        done
+        [[ $is_child -eq 1 ]] && continue
+
         # 4. If current dir is a git repo, mark it
         if [[ -d "$dir/.git" ]]; then
             git_projects[$dir]=1
         fi
-        
+
         projects+=("$dir")
-    local max_depth="${GODEV_MAX_DEPTH:-3}"
     done < <(find "$base_dir" -mindepth 1 -maxdepth "$max_depth" -type d 2>/dev/null | sort)
     
     printf "%s\n" "${projects[@]}"
@@ -901,7 +917,7 @@ main() {
             local is_list="false"
             local show_remote="false"
             local show_tree="false"
-            shift
+            [[ $# -gt 0 ]] && shift
             while [[ $# -gt 0 ]]; do
                 case "$1" in
                     -l) is_list="true" ;;
