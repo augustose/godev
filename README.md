@@ -219,13 +219,37 @@ godev <partial-name>      # Fuzzy search with selection
 godev --list              # List ALL projects with Git stats (alphabetical)
 godev -l                  # Short form
 godev --list --sort-by-commit  # Sort by last commit (most recent first)
+godev --list --remote     # Include remote URL column
+godev --list --tree       # Tree view of projects
+godev --list --depth N    # Override search depth (default: 3)
 godev <pattern> -l        # List projects matching pattern
+
+# HTML Dashboard
+godev --cache             # Open HTML dashboard in browser (generates it if missing)
+godev --cache --update    # Regenerate the HTML with fresh data, then open it
 
 # Other
 godev --setup             # Configure or reconfigure
 godev --version, -v       # Show version
 godev --help, -h          # Show help
 ```
+
+### HTML Dashboard
+
+`godev --cache` renders your full project list (the equivalent of `--list --remote`)
+as a static HTML page at `~/.config/godev/projects.html` and opens it in your
+browser (`open` on macOS, `xdg-open` on Linux). No external dependencies — plain
+HTML/CSS with automatic dark mode and an instant client-side filter.
+
+Columns: project (links to the folder via `file://`), last commit, branch,
+status, 30-day activity, remote (normalized to a clickable web URL) and an
+optional per-repo description. To set a description for a repo:
+
+```zsh
+git config --local repo.description "Short description of the project"
+```
+
+The page is a cached snapshot — run `godev --cache --update` to refresh it.
 
 ### Real-World Examples
 

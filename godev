@@ -3,7 +3,7 @@
 # godev - Development Directory Navigation Tool
 # Version: 1.0.0
 
-VERSION="2.4.1"
+VERSION="2.5.0"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/godev"
 CONFIG_FILE="$CONFIG_DIR/config"
 
@@ -791,6 +791,289 @@ tree_projects() {
 }
 
 # ============================================================================
+# CACHE HTML
+# ============================================================================
+
+HTML_CACHE_FILE="$CONFIG_DIR/projects.html"
+
+html_escape() {
+    local s="$1"
+    s="${s//&/&amp;}"
+    s="${s//</&lt;}"
+    s="${s//>/&gt;}"
+    s="${s//\"/&quot;}"
+    print -r -- "$s"
+}
+
+# Convert a git remote URL to a clickable web URL (empty if not possible)
+remote_to_web_url() {
+    local r="$1"
+    case "$r" in
+        git@*)
+            local host="${r#git@}"
+            host="${host%%:*}"
+            local repo_path="${r#git@*:}"
+            repo_path="${repo_path%.git}"
+            echo "https://${host}/${repo_path}"
+            ;;
+        ssh://git@*)
+            local rest="${r#ssh://git@}"
+            rest="${rest%.git}"
+            echo "https://${rest}"
+            ;;
+        http://*|https://*)
+            echo "${r%.git}"
+            ;;
+        *)
+            echo ""
+            ;;
+    esac
+}
+
+generate_html_cache() {
+    load_config || return 1
+
+    local clean_base="${GODEV_BASE_DIR%/}"
+    local total=0
+    local with_git=0
+    local modified=0
+    local rows=""
+
+    echo "${CYAN}Escaneando proyectos...${NC}" >&2
+
+    local -a projects_data
+    while IFS= read -r project; do
+        local name="${project#$clean_base/}"
+        local git_raw=$(get_git_info "$project")
+        local has_git=$(echo "$git_raw" | grep -o "has_git:[^|]*" | cut -d: -f2)
+
+        local last_commit="—"
+        local branch="—"
+        local project_status="no git"
+        local activity="0"
+        local remote=""
+
+        if [[ "$has_git" == "true" ]]; then
+            last_commit=$(echo "$git_raw" | grep -o "last_commit:[^|]*" | cut -d: -f2-)
+            branch=$(echo "$git_raw" | grep -o "branch:[^|]*" | cut -d: -f2)
+            project_status=$(echo "$git_raw" | grep -o "status:[^|]*" | cut -d: -f2)
+            activity=$(echo "$git_raw" | grep -o "activity:[^|]*" | cut -d: -f2)
+            remote=$(echo "$git_raw" | grep -o "remote:[^|]*" | cut -d: -f2-)
+            [[ "$remote" == "no_remote" ]] && remote=""
+
+            ((with_git++))
+            [[ "$project_status" == "modified" ]] && ((modified++))
+        fi
+
+        projects_data+=("$name|$has_git|$last_commit|$branch|$project_status|$activity|$remote|$project")
+        ((total++))
+    done < <(scan_projects "$GODEV_BASE_DIR")
+
+    # Build table rows (alphabetical order)
+    (( total > 0 )) && while IFS='|' read -r name has_git last_commit branch project_status activity remote project_path; do
+        local esc_name=$(html_escape "$name")
+        local esc_path=$(html_escape "$project_path")
+
+        local status_html=""
+        if [[ "$has_git" != "true" ]]; then
+            status_html='<span class="badge nogit">no git</span>'
+        elif [[ "$project_status" == "modified" ]]; then
+            status_html='<span class="badge modified">&#9679; modified</span>'
+        else
+            status_html='<span class="badge clean">&#10003; clean</span>'
+        fi
+
+        local activity_html="—"
+        if [[ "$has_git" == "true" ]]; then
+            local dots=""
+            if (( activity > 20 )); then dots='<span class="act high">&#9679;&#9679;&#9679;</span>'
+            elif (( activity > 5 )); then dots='<span class="act mid">&#9679;&#9679;&#9675;</span>'
+            elif (( activity > 0 )); then dots='<span class="act low">&#9679;&#9675;&#9675;</span>'
+            else dots='<span class="act none">&#9675;&#9675;&#9675;</span>'
+            fi
+            activity_html="${dots} <span class=\"muted\">(${activity})</span>"
+        fi
+
+        local remote_html='<span class="muted">—</span>'
+        if [[ -n "$remote" ]]; then
+            local web_url=$(remote_to_web_url "$remote")
+            local esc_remote=$(html_escape "$remote")
+            if [[ -n "$web_url" ]]; then
+                remote_html="<a href=\"$(html_escape "$web_url")\" target=\"_blank\" rel=\"noopener\">${esc_remote}</a>"
+            else
+                remote_html="<span class=\"mono\">${esc_remote}</span>"
+            fi
+        fi
+
+        local branch_html="—"
+        [[ "$has_git" == "true" ]] && branch_html="<span class=\"mono branch\">$(html_escape "$branch")</span>"
+
+        # Repo description from local git config (git config --local repo.description)
+        local description_html='<span class="muted">—</span>'
+        if [[ "$has_git" == "true" ]]; then
+            local description=$(git -C "$project_path" config --local repo.description 2>/dev/null)
+            [[ -n "$description" ]] && description_html="$(html_escape "$description")"
+        fi
+
+        rows+="<tr>
+<td><a class=\"project\" href=\"file://${esc_path}\" title=\"${esc_path}\">${esc_name}</a></td>
+<td>${last_commit}</td>
+<td>${branch_html}</td>
+<td>${status_html}</td>
+<td>${activity_html}</td>
+<td class=\"remote\">${remote_html}</td>
+<td class=\"description\">${description_html}</td>
+</tr>
+"
+    done < <(printf "%s\n" "${projects_data[@]}" | sort -t'|' -k1)
+
+    local generated_at=$(date "+%Y-%m-%d %H:%M:%S")
+
+    mkdir -p "$CONFIG_DIR"
+    cat > "$HTML_CACHE_FILE" <<EOF
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>godev — Projects</title>
+<style>
+:root {
+    --fg: #1f2328;
+    --muted: #6e7781;
+    --border: #d8dee4;
+    --bg: #ffffff;
+    --bg-alt: #f6f8fa;
+    --accent: #0969da;
+    --green: #1a7f37;
+    --amber: #9a6700;
+}
+@media (prefers-color-scheme: dark) {
+    :root {
+        --fg: #e6edf3;
+        --muted: #8b949e;
+        --border: #30363d;
+        --bg: #0d1117;
+        --bg-alt: #161b22;
+        --accent: #58a6ff;
+        --green: #3fb950;
+        --amber: #d29922;
+    }
+}
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    padding: 2.5rem 2rem;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    color: var(--fg);
+    background: var(--bg);
+    max-width: 1200px;
+    margin-inline: auto;
+}
+header { margin-bottom: 1.5rem; }
+h1 { font-size: 1.4rem; font-weight: 600; margin: 0 0 0.25rem; }
+.subtitle { color: var(--muted); font-size: 0.85rem; }
+.mono, td:nth-child(2) { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85em; }
+.summary { display: flex; gap: 1.5rem; margin: 1.25rem 0; font-size: 0.85rem; color: var(--muted); }
+.summary strong { color: var(--fg); font-weight: 600; }
+#filter {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+    color: var(--fg);
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    outline: none;
+}
+#filter:focus { border-color: var(--accent); }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+th {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    font-weight: 600;
+    background: var(--bg-alt);
+}
+tr:hover td { background: var(--bg-alt); }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+a.project { font-weight: 500; color: var(--fg); }
+a.project:hover { color: var(--accent); }
+.badge { font-size: 0.8rem; white-space: nowrap; }
+.badge.clean { color: var(--green); }
+.badge.modified { color: var(--amber); }
+.badge.nogit { color: var(--muted); }
+.branch { color: var(--accent); }
+.act.high { color: var(--green); }
+.act.mid { color: var(--amber); }
+.act.low, .act.none, .muted { color: var(--muted); }
+.remote { word-break: break-all; }
+.description { color: var(--muted); max-width: 24rem; }
+footer { margin-top: 1.5rem; font-size: 0.78rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+<h1>godev — Projects</h1>
+<div class="subtitle">Base directory: <span class="mono">$(html_escape "$clean_base")</span> &middot; Generated: ${generated_at}</div>
+</header>
+<div class="summary">
+<span>Total projects: <strong>${total}</strong></span>
+<span>Git repositories: <strong>${with_git}</strong></span>
+<span>Modified: <strong>${modified}</strong></span>
+</div>
+<input type="search" id="filter" placeholder="Filter projects… (name, branch, remote)" autofocus>
+<table>
+<thead>
+<tr><th>Project</th><th>Last commit</th><th>Branch</th><th>Status</th><th>Activity (30d)</th><th>Remote</th><th>Description</th></tr>
+</thead>
+<tbody>
+${rows}</tbody>
+</table>
+<footer>Generated by <strong>godev</strong> v${VERSION} &middot; Refresh with <span class="mono">godev --cache --update</span></footer>
+<script>
+document.getElementById('filter').addEventListener('input', function () {
+    var q = this.value.toLowerCase();
+    document.querySelectorAll('tbody tr').forEach(function (tr) {
+        tr.style.display = tr.textContent.toLowerCase().includes(q) ? '' : 'none';
+    });
+});
+</script>
+</body>
+</html>
+EOF
+
+    echo "${GREEN}✓ HTML cache generado: ${HTML_CACHE_FILE}${NC}" >&2
+    echo "  ${GRAY}${total} proyectos (${with_git} con git, ${modified} modificados)${NC}" >&2
+    return 0
+}
+
+open_html_cache() {
+    local do_update="$1"
+
+    if [[ "$do_update" == "true" ]] || [[ ! -f "$HTML_CACHE_FILE" ]]; then
+        generate_html_cache || return 1
+    fi
+
+    if command -v open &> /dev/null; then
+        open "$HTML_CACHE_FILE"
+    elif command -v xdg-open &> /dev/null; then
+        xdg-open "$HTML_CACHE_FILE"
+    else
+        echo "${YELLOW}⚠ No se pudo abrir el navegador. Archivo: ${HTML_CACHE_FILE}${NC}" >&2
+        return 1
+    fi
+
+    echo "${GREEN}✓ Abriendo en el navegador: ${HTML_CACHE_FILE}${NC}" >&2
+    return 0
+}
+
+# ============================================================================
 # COMANDOS PRINCIPALES
 # ============================================================================
 
@@ -815,6 +1098,14 @@ ${BOLD}LISTING:${NC}
     ${CYAN}godev -l -t${NC}              ${GRAY}# (short form)${NC}
     ${CYAN}godev <pattern> -l${NC}      ${GRAY}# List projects matching pattern${NC}
     ${CYAN}godev <pattern> -l -t${NC}   ${GRAY}# Tree view filtered by pattern${NC}
+
+${BOLD}HTML DASHBOARD:${NC}
+    ${CYAN}godev --cache${NC}           ${GRAY}# Open HTML dashboard in browser (like --list --remote)${NC}
+    ${CYAN}godev --cache --update${NC}  ${GRAY}# Regenerate the HTML with fresh data, then open it${NC}
+    ${GRAY}Columns: project (file:// link), last commit, branch, status,${NC}
+    ${GRAY}activity (30d), remote (web link) and description.${NC}
+    ${GRAY}Set a description per repo: ${CYAN}git config --local repo.description "text"${NC}
+    ${GRAY}File: ${CYAN}~/.config/godev/projects.html${NC}
 
 ${BOLD}OTHER COMMANDS:${NC}
     ${CYAN}--setup${NC}                 ${GRAY}# Configure/reconfigure godev${NC}
@@ -905,6 +1196,19 @@ main() {
                 return $?
             fi
             list_projects "$extra_arg" "$sort_mode" "$show_remote"
+            return $?
+            ;;
+        --cache)
+            local do_update="false"
+            shift
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --update|update) do_update="true" ;;
+                    --depth) shift; export GODEV_MAX_DEPTH="$1" ;;
+                esac
+                shift
+            done
+            open_html_cache "$do_update"
             return $?
             ;;
         --update)
