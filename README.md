@@ -241,6 +241,8 @@ as a static HTML page at `~/.config/godev/projects.html` and opens it in your
 browser (`open` on macOS, `xdg-open` on Linux). No external dependencies — plain
 HTML/CSS with automatic dark mode and an instant client-side filter.
 
+<img src="images/godev-cache-html.png" alt="godev --cache HTML dashboard with searchable project table" width="800">
+
 Columns: project (links to the folder via `file://`), last commit, branch,
 status, 30-day activity, remote (normalized to a clickable web URL) and an
 optional per-repo description. To set a description for a repo:
