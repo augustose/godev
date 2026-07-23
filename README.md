@@ -229,6 +229,7 @@ godev --cache             # Open HTML dashboard in browser (generates it if miss
 godev --cache --update    # Regenerate the HTML with fresh data, then open it
 
 # Other
+godev --update            # Check GitHub for a new version and install it
 godev --setup             # Configure or reconfigure
 godev --version, -v       # Show version
 godev --help, -h          # Show help
@@ -252,6 +253,30 @@ git config --local repo.description "Short description of the project"
 ```
 
 The page is a cached snapshot — run `godev --cache --update` to refresh it.
+
+### Updating godev
+
+Keep godev up to date without re-running the installer:
+
+```zsh
+godev --update
+```
+
+It checks the [latest GitHub release](https://github.com/augustose/godev/releases),
+and if a newer version exists it shows `current → new` and asks for confirmation
+before installing. The update is **safe by design**:
+
+- Downloads from the release **tag**, so the version announced is exactly the one installed.
+- Validates the downloaded script (syntax + sanity check) before touching anything.
+- Backs up your current binary to `~/.local/bin/godev.backup-<timestamp>` and
+  replaces it atomically.
+- Only contacts the network when you run `--update` — never during normal navigation.
+
+Nothing else is touched: your `~/.zshrc` wrapper, config, and projects stay as they are.
+After updating, reload your shell with `source ~/.zshrc`.
+
+> **Note:** `--update` is available from **v2.6.0** onward. On older versions,
+> re-run the [installer](#-installation) once to get it.
 
 ### Real-World Examples
 
