@@ -12,23 +12,36 @@ Hoy ese comando es un placeholder (`godev:1214`) que solo imprime
 
 ## Decisiones de diseño
 
-- **Fuente de la última versión**: GitHub Releases con *fallback* al raw de `main`.
+- **Fuente de la última versión**: GitHub Releases (release-first), descargando
+  **desde el tag del release** para garantizar que *lo anunciado == lo instalado*.
+  *Fallback* al raw de `main` solo si no hay releases publicados.
 - **Comportamiento**: `--update` chequea, muestra el diff de versión y pide
   confirmación `(y/N)` antes de descargar e instalar.
 - **Sin auto-aviso en segundo plano**: godev solo contacta GitHub cuando el
   usuario corre `--update` explícitamente. Cero latencia y cero red en el uso normal.
 - **Instalación segura**: descargar a temporal → validar → backup → reemplazo atómico.
 
+### Nota sobre releases vs main (hallazgo del testing)
+
+Al probar, se detectó que los releases iban atrasados respecto a `main`
+(último release `v2.2.0` vs `main` en `2.5.0`). Se resolvió adoptando el modelo
+profesional: **release-first descargando desde el tag** (anunciado == instalado),
+y como parte de la puesta en marcha se taggea `v2.6.0` (primera versión con
+`--update`) como release oficial. La versión del script se sube a `2.6.0`.
+
 ## Sección 1 — Flujo de `--update`
 
 Nueva función `self_update()` llamada desde el `case --update`.
 
-1. **Resolver versión remota** (única fase con red):
+1. **Resolver versión remota** (única fase con red) — `_resolve_remote` devuelve
+   `version|ref`:
    - `GET https://api.github.com/repos/augustose/godev/releases/latest` →
-     `tag_name` (ej. `v2.6.0`, se normaliza quitando la `v`).
+     `tag_name` (ej. `v2.6.0`). `version` = `2.6.0`, `ref` = `v2.6.0` (el tag).
    - Si no hay releases (404 / vacío / sin red a la API), *fallback*: descargar el
-     raw de `main` y extraer la línea `VERSION="..."` con grep.
+     raw de `main`, extraer `VERSION="..."`; `ref` = `main`.
    - Si ambos fallan → error claro en español, salir con código 1 (sin tocar nada).
+   - La descarga posterior usa `ref`, por lo que se instala exactamente la versión
+     anunciada.
 2. **Comparar** versión local (`$VERSION`) vs remota con `sort -V` (semántico).
    - local ≥ remota → *"Ya tienes la última versión (X) ✓"*, salir 0.
    - remota > local → mostrar `LOCAL → REMOTA` y pedir confirmación en `/dev/tty`.

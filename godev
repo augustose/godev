@@ -3,11 +3,15 @@
 # godev - Development Directory Navigation Tool
 # Version: 1.0.0
 
-VERSION="2.5.0"
+VERSION="2.6.0"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/godev"
 CONFIG_FILE="$CONFIG_DIR/config"
 
 VERSION_FILE="$CONFIG_DIR/version_info"
+
+# Repositorio público para auto-actualización (godev --update)
+GODEV_REPO="augustose/godev"
+GODEV_BRANCH="main"
 
 # Colores
 RED=$'\033[0;31m'
@@ -1109,6 +1113,7 @@ ${BOLD}HTML DASHBOARD:${NC}
 
 ${BOLD}OTHER COMMANDS:${NC}
     ${CYAN}--setup${NC}                 ${GRAY}# Configure/reconfigure godev${NC}
+    ${CYAN}--update${NC}                ${GRAY}# Check GitHub for a new version and install it${NC}
     ${CYAN}--version, -v${NC}           ${GRAY}# Show version${NC}
     ${CYAN}--help, -h${NC}              ${GRAY}# Show this help${NC}
 
@@ -1146,6 +1151,156 @@ EOF
 
 show_version() {
     echo "godev version ${VERSION}"
+}
+
+# ============================================================================
+# AUTO-ACTUALIZACIÓN
+# ============================================================================
+
+# Descarga una URL a un archivo. Usa curl o wget. Devuelve 0 si OK.
+_download() {
+    local url="$1" out="$2"
+    if command -v curl &> /dev/null; then
+        curl -fsSL --max-time 10 "$url" -o "$out" 2>/dev/null
+    elif command -v wget &> /dev/null; then
+        wget -q --timeout=10 "$url" -O "$out" 2>/dev/null
+    else
+        return 127
+    fi
+}
+
+# Resuelve la última versión publicada. Imprime "version|ref" donde:
+#   version = número sin la 'v' (ej. 2.6.0)
+#   ref     = tag del release (ej. v2.6.0) o la rama de fallback (ej. main)
+# El ref indica de dónde descargar, garantizando anunciado == instalado.
+# Vacío si no se pudo resolver.
+_resolve_remote() {
+    local tmp tag raw_ver
+    tmp=$(mktemp) || return 1
+
+    # 1) Preferir el último GitHub Release; descargar desde su TAG
+    if _download "https://api.github.com/repos/${GODEV_REPO}/releases/latest" "$tmp"; then
+        tag=$(grep -m1 '"tag_name"' "$tmp" | sed -E 's/.*"tag_name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
+        if [[ -n "$tag" ]]; then
+            rm -f "$tmp"
+            echo "${tag#v}|${tag}"
+            return 0
+        fi
+    fi
+
+    # 2) Fallback: raw de la rama (sólo si no hay releases publicados)
+    if _download "https://raw.githubusercontent.com/${GODEV_REPO}/${GODEV_BRANCH}/godev" "$tmp"; then
+        raw_ver=$(grep -m1 '^VERSION=' "$tmp" | sed -E 's/^VERSION="?([^"]+)"?.*/\1/')
+        if [[ -n "$raw_ver" ]]; then
+            rm -f "$tmp"
+            echo "${raw_ver}|${GODEV_BRANCH}"
+            return 0
+        fi
+    fi
+
+    rm -f "$tmp"
+    return 1
+}
+
+# Compara dos versiones semánticas. Devuelve 0 si $1 > $2 (hay update disponible).
+_version_gt() {
+    [[ "$1" != "$2" ]] && [[ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n1)" == "$1" ]]
+}
+
+self_update() {
+    if ! command -v curl &> /dev/null && ! command -v wget &> /dev/null; then
+        echo "${RED}✗ Necesitas curl o wget instalado para actualizar${NC}" >&2
+        return 1
+    fi
+
+    echo "${CYAN}Buscando la última versión en GitHub (${GODEV_REPO})...${NC}"
+
+    local resolved remote_version remote_ref
+    resolved=$(_resolve_remote)
+    if [[ -z "$resolved" ]]; then
+        echo "${RED}✗ No se pudo contactar GitHub para averiguar la última versión${NC}" >&2
+        return 1
+    fi
+    remote_version="${resolved%%|*}"
+    remote_ref="${resolved##*|}"
+
+    # Comparar
+    if ! _version_gt "$remote_version" "$VERSION"; then
+        echo "${GREEN}✓ Ya tienes la última versión (${VERSION})${NC}"
+        return 0
+    fi
+
+    echo ""
+    echo "${BOLD}Hay una versión nueva disponible:${NC} ${YELLOW}${VERSION}${NC} → ${GREEN}${remote_version}${NC}"
+    echo -n "¿Actualizar ahora? (y/N): "
+    local answer
+    read -k 1 answer < /dev/tty
+    echo
+    if [[ ! "$answer" =~ ^[yY]$ ]]; then
+        echo "${CYAN}Actualización cancelada${NC}"
+        return 0
+    fi
+
+    # Destino: el binario instalado
+    local dest="$HOME/.local/bin/godev"
+    local dest_dir="${dest:h}"
+    if [[ ! -d "$dest_dir" ]]; then
+        echo "${RED}✗ No se encontró el directorio de instalación: $dest_dir${NC}" >&2
+        return 1
+    fi
+
+    # Descargar a temporal dentro del mismo directorio (mv atómico)
+    local tmpfile
+    tmpfile=$(mktemp "${dest_dir}/godev.new.XXXXXX") || {
+        echo "${RED}✗ No se pudo crear archivo temporal en $dest_dir${NC}" >&2
+        return 1
+    }
+
+    echo "${CYAN}Descargando godev ${remote_version} (${remote_ref})...${NC}"
+    if ! _download "https://raw.githubusercontent.com/${GODEV_REPO}/${remote_ref}/godev" "$tmpfile"; then
+        rm -f "$tmpfile"
+        echo "${RED}✗ Falló la descarga${NC}" >&2
+        return 1
+    fi
+
+    # Validar: sintaxis y que sea realmente el script godev
+    if ! zsh -n "$tmpfile" 2>/dev/null; then
+        rm -f "$tmpfile"
+        echo "${RED}✗ El archivo descargado tiene errores de sintaxis; se aborta sin tocar tu instalación${NC}" >&2
+        return 1
+    fi
+    if ! grep -q '^VERSION=' "$tmpfile"; then
+        rm -f "$tmpfile"
+        echo "${RED}✗ El archivo descargado no parece ser godev; se aborta${NC}" >&2
+        return 1
+    fi
+
+    # Backup del binario actual (preservar información)
+    if [[ -f "$dest" ]]; then
+        local backup="${dest}.backup-$(date +%s)"
+        cp "$dest" "$backup" && echo "${GRAY}Backup guardado en: ${backup}${NC}"
+    fi
+
+    # Reemplazo atómico
+    chmod +x "$tmpfile"
+    if ! mv "$tmpfile" "$dest"; then
+        rm -f "$tmpfile"
+        echo "${RED}✗ No se pudo reemplazar el binario en $dest${NC}" >&2
+        return 1
+    fi
+
+    # Actualizar version_info
+    cat > "$VERSION_FILE" << EOF
+version=$remote_version
+install_date=$(date +%s)
+install_source=https://raw.githubusercontent.com/${GODEV_REPO}/${remote_ref}/godev
+updated_via=self-update
+EOF
+
+    echo ""
+    echo "${GREEN}${BOLD}✓ Actualizado a v${remote_version}${NC}"
+    echo "${CYAN}Recargá tu shell para usar la nueva versión:${NC} source ~/.zshrc"
+    return 0
 }
 
 # ============================================================================
@@ -1212,8 +1367,8 @@ main() {
             return $?
             ;;
         --update)
-            echo "${YELLOW}Función de actualización en desarrollo${NC}"
-            return 0
+            self_update
+            return $?
             ;;
         *)
             # Check for flags after the search term

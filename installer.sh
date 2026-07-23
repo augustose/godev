@@ -212,8 +212,10 @@ fi
 
 echo ""
 echo "${CYAN}[8/10]${NC} Saving installation info..."
+# Read the real version from the installed script to avoid drift
+INSTALLED_VERSION=$("$GODEV_SCRIPT" --version 2>/dev/null | grep -o '[0-9][0-9.]*' || echo "unknown")
 cat > "${XDG_CONFIG_HOME:-$HOME/.config}/godev/version_info" << EOF
-version=2.1.11
+version=$INSTALLED_VERSION
 install_date=$(date +%s)
 install_source=$SCRIPT_URL
 fzf_available=$FZF_INSTALLED
