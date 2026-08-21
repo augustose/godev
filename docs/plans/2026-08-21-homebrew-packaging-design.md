@@ -30,8 +30,8 @@ De ahí salen cuatro conflictos concretos, todos reales:
 
 - **Canal**: tap propio (`augustose/homebrew-godev`). homebrew-core exige notoriedad
   (~75 stars / 30 forks) y revisión de mantenedores; se puede postular más adelante.
-- **Activación del wrapper**: `godev init zsh` (patrón zoxide/starship) más
-  `godev init --install`, que cablea la línea por el usuario. Homebrew no escribe en
+- **Activación del wrapper**: `godev --init zsh` (patrón zoxide/starship) más
+  `godev --init --install`, que cablea la línea por el usuario. Homebrew no escribe en
   el `.zshrc`; godev sí puede, porque el usuario se lo pidió explícitamente.
   Precedente directo: `fzf` en homebrew-core hace exactamente esto.
 - **`--update` bajo brew**: detectar y **redirigir**. Consulta la versión remota,
@@ -43,27 +43,37 @@ De ahí salen cuatro conflictos concretos, todos reales:
 
 ```bash
 brew install augustose/godev/godev
-godev init --install && source ~/.zshrc
+godev --init --install && source ~/.zshrc
 ```
 
 Dos comandos, cero edición manual de archivos. Es el piso alcanzable dada la
 restricción de Homebrew.
 
-## Sección 1 — `godev init`
+## Sección 1 — `godev --init`
 
 Nuevo comando en `main()`. La función wrapper se mueve de `installer.sh` al script,
 como fuente única de verdad.
 
-**`godev init zsh`** imprime la función a stdout y nada más. Se consume con
-`eval "$(godev init zsh)"`.
+**Por qué `--init` y no `init` pelado** (que es la convención de zoxide/starship):
+el wrapper decide con `[[ "$1" == -* ]]` si NO debe hacer `cd`, así que `--init`
+pasa derecho sin caso especial; y un subcomando sin guiones colisionaría con un
+proyecto llamado `init`, que dejaría de ser navegable. Todo el CLI de godev ya es
+`--flag`.
+
+**`godev --init zsh`** imprime la función a stdout y nada más. Se consume con
+`eval "$(godev --init zsh)"`.
+
+**Trampa de zsh**: `$0` dentro de una función es el *nombre de la función*, no el
+del script (opción `FUNCTION_ARGZERO`, activa por defecto). Por eso la ruta se captura
+en globales a nivel top-level, `GODEV_BIN`/`GODEV_BIN_REAL`, y no dentro de una función.
 
 La ruta del binario se resuelve **en tiempo de generación** con `${0:a}` de zsh:
 absoluta pero *sin* resolver symlinks. Bajo brew eso da `/opt/homebrew/bin/godev`
 (el symlink estable), no `.../Cellar/godev/2.7.0/bin/godev`. El symlink sobrevive a
 `brew upgrade`; la ruta del Cellar no. La función sigue apuntando bien tras cada
-actualización sin re-ejecutar `init`. **Cierra el conflicto #4.**
+actualización sin re-ejecutar `--init`. **Cierra el conflicto #4.**
 
-**`godev init --install`**:
+**`godev --init --install`**:
 
 1. Backup de `~/.zshrc` con timestamp.
 2. Detecta el bloque viejo (`^godev() {` … `^}`) y lo reemplaza por la línea `eval`.
@@ -71,9 +81,25 @@ actualización sin re-ejecutar `init`. **Cierra el conflicto #4.**
    shadowing de PATH (**conflicto #3**) e indica cuál gana. No borra nada.
 4. Pide confirmación antes de escribir.
 
-**Alcance recortado a propósito**: `init` solo soporta `zsh`. `main()` ya aborta sin
+**Alcance recortado a propósito**: `--init` solo soporta `zsh`. `main()` ya aborta sin
 `$ZSH_VERSION` (`godev:1310`), así que bash/fish sería código muerto. Cualquier otro
 argumento → error claro.
+
+### El alias corto: opt-in, nunca automático
+
+No se renombra la función a `gd` ni se agrega el alias durante la instalación.
+`gd` es un alias del plugin `git` de oh-my-zsh (`git diff`), el setup zsh más
+extendido que hay; pisarlo es un fallo **silencioso** — `gd` simplemente hace otra
+cosa, sin error. Además el nombre de la función debe coincidir con el del binario y
+el del Formula (`godev`), que es lo que dicen `--help`, los caveats de brew y los docs.
+
+En su lugar, `--init` acepta `--alias NOMBRE` (opt-in), y `--init --install`
+pregunta con **"no" por defecto**. Antes de escribir, avisa si el nombre ya está
+tomado: busca `alias NOMBRE=` en el `.zshrc` y contrasta contra la lista de aliases
+del plugin `git` de oh-my-zsh cuando ese plugin está activo.
+
+`--init --install` **nunca borra un `alias X='godev'` escrito a mano** por el
+usuario. Solo reemplaza la función wrapper.
 
 ## Sección 2 — `--update` deja de adivinar dónde vive
 
@@ -128,7 +154,7 @@ class Godev < Formula
   def caveats
     <<~EOS
       godev necesita una función de shell para poder cambiar de directorio:
-        godev init --install && source ~/.zshrc
+        godev --init --install && source ~/.zshrc
     EOS
   end
 
@@ -164,7 +190,7 @@ brew install augustose/godev/godev
 
 # 2. Cablear el wrapper nuevo. Detecta la función vieja, la reemplaza,
 #    y deja backup con timestamp de tu ~/.zshrc
-godev init --install
+godev --init --install
 
 # 3. Quitar el binario viejo (tu config en ~/.config/godev NO se toca)
 rm ~/.local/bin/godev
@@ -187,7 +213,7 @@ Notas para el README:
 - Los `godev.backup-*` que haya dejado `--update` en `~/.local/bin/` quedan a
   criterio del usuario.
 
-`godev init --install` (Sección 1, punto 3) detecta el caso de tener las dos copias
+`godev --init --install` (Sección 1, punto 3) detecta el caso de tener las dos copias
 conviviendo y avisa cuál gana, para que el paso 3 no se olvide.
 
 ## Prerequisito: falta el archivo LICENSE
@@ -198,13 +224,13 @@ declarado. Crear `LICENSE` (MIT) es bloqueante, no opcional.
 
 ## Archivos afectados
 
-- **`godev`**: `godev init` (`init zsh` + `init --install`); `_install_kind()`;
+- **`godev`**: `godev init` (`--init zsh` + `--init --install`); `_install_kind()`;
   `self_update()` con `dest="${0:a}"` y la rama brew; línea en `show_help()`;
   bump `VERSION="2.7.0"`.
-- **`installer.sh`**: escribir `eval "$(godev init zsh)"` en vez de la función literal.
+- **`installer.sh`**: escribir `eval "$(godev --init zsh)"` en vez de la función literal.
 - **`LICENSE`** (nuevo): MIT.
 - **`README.md`**: sección de instalación con Homebrew; bloque "Migrar desde la
-  instalación por script" (Sección 4); documentar `init`.
+  instalación por script" (Sección 4); documentar `--init`.
 - **Repo nuevo** `augustose/homebrew-godev`: `Formula/godev.rb`.
 - **Sin dependencias nuevas** en el script.
 
@@ -224,15 +250,18 @@ Matriz mínima, además de `zsh -n godev`:
 
 | Caso | Verificar |
 |---|---|
-| `init zsh` bajo brew | La función embebe `$(brew --prefix)/bin/godev`, no la ruta del Cellar. |
-| `init zsh` standalone | Embebe `~/.local/bin/godev`. |
-| `init --install` con función vieja presente | La reemplaza, deja backup, `.zshrc` queda válido. |
-| `init --install` con ambas instalaciones | Emite el aviso de shadowing de PATH. |
+| `--init zsh` bajo brew | La función embebe `$(brew --prefix)/bin/godev`, no la ruta del Cellar. |
+| `--init zsh` standalone | Embebe `~/.local/bin/godev`. |
+| `--init --install` con función vieja presente | La reemplaza, deja backup, `.zshrc` queda válido. |
+| `--init --install` con ambas instalaciones | Emite el aviso de shadowing de PATH. |
+| `--init --alias gd` con oh-my-zsh+git | Avisa de la colisión con `git diff` y pide confirmación. |
+| `--init --install` con `alias gd='godev'` a mano | El alias del usuario sobrevive intacto. |
+| `.zshrc` resultante | Pasa `zsh -n` antes de reemplazar el original. |
 | `--update` bajo brew, versión nueva | Anuncia y redirige. **El Cellar queda sin tocar** (verificar mtime). |
 | `--update` bajo brew, al día | Mensaje ✓, sin red de descarga. |
 | `--update` standalone | Flujo actual intacto, backup creado. |
 | Formula | `brew install --build-from-source`, `brew audit --strict`, `brew test`. |
-| Navegación tras `brew upgrade` | El wrapper sigue resolviendo al binario nuevo sin re-ejecutar `init`. |
+| Navegación tras `brew upgrade` | El wrapper sigue resolviendo al binario nuevo sin re-ejecutar `--init`. |
 | Migración completa (Sección 4) | Tras los 5 pasos: `command -v godev` apunta a brew y `~/.config/godev/config` quedó intacto. |
 
 ## Qué NO toca
@@ -245,5 +274,5 @@ alternativo; las dos vías convergen en la misma función wrapper.
 
 - Automatización CI que abra PR al tap en cada release (`brew bump-formula-pr`).
   Se agrega cuando la cadencia de releases lo justifique.
-- Soporte bash/fish en `init`.
+- Soporte bash/fish en `--init`.
 - Postulación a homebrew-core.
