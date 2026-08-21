@@ -241,6 +241,13 @@ declarado. Crear `LICENSE` (MIT) es bloqueante, no opcional.
 3. Convergir `installer.sh` sobre la línea `eval`.
 4. Bump a `2.7.0`, `show_help()`, README (incluida la guía de migración).
 5. Tag `v2.7.0` **y GitHub Release** (`_resolve_remote()` prioriza releases).
+
+   > **Ojo con el hook `pre-commit`**: auto-incrementa el PATCH en cada commit que
+   > toque `godev`, así que la versión sube sola mientras se implementa. El hook
+   > respeta un `VERSION` cambiado a mano (si difiere de HEAD lo deja). Por eso el
+   > bump a `2.7.0` va en el **último** commit antes del tag, y el tag se saca de
+   > ese commit exacto: el `test do` del Formula compara la salida de `--version`
+   > contra la versión del tag y falla si hay drift.
 6. `curl -fsSL <tarball> | shasum -a 256` para el `sha256`.
 7. Crear el tap con el Formula.
 
