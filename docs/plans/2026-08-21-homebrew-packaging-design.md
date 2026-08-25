@@ -1,7 +1,7 @@
 # Diseño: Distribución de godev vía Homebrew
 
 Fecha: 2026-08-21
-Estado: aprobado, pendiente de implementación
+Estado: implementado (secciones 1-4). Pendiente: publicar el tag, el release y el tap (ver packaging/TAP.md).
 
 ## Objetivo
 
