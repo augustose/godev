@@ -155,55 +155,18 @@ echo "${GREEN}✓ Permissions set${NC}"
 # ============================================================================
 
 echo ""
-echo "${CYAN}[7/10]${NC} Setting up wrapper function in ZSH..."
+echo "${CYAN}[7/10]${NC} Setting up shell integration..."
 
-# Check if it already exists
-if grep -q "^godev()" "$ZSHRC" 2>/dev/null; then
-    echo "${YELLOW}⚠ godev function already exists in ~/.zshrc${NC}"
-    echo -n "  Replace? (y/N): "
-    read -k 1 replace < /dev/tty
-    echo
-
-    if [[ "$replace" =~ ^[yY]$ ]]; then
-        # Backup before modifying
-        cp "$ZSHRC" "$ZSHRC.backup-$(date +%s)"
-        # Remove old function (between godev() { and the closing })
-        sed -i.backup '/^godev() {$/,/^}$/d' "$ZSHRC"
-        echo "${GREEN}✓ Previous function removed (backup created)${NC}"
-    else
-        echo "${YELLOW}⚠ Using existing function${NC}"
-        SKIP_WRAPPER=true
-    fi
-fi
-
-if [[ "$SKIP_WRAPPER" != "true" ]]; then
-    cat >> "$ZSHRC" << 'EOF'
-
-# godev - Function wrapper (added by installer)
-godev() {
-    local result
-
-    # Commands that don't change directory (start with -)
-    if [[ "$1" =~ ^- ]]; then
-        command ~/.local/bin/godev "$@"
-        return $?
-    fi
-
-    # Navigation command
-    result=$(command ~/.local/bin/godev "$@")
-    local exit_code=$?
-
-    # If result is a valid directory, change to it
-    if [[ $exit_code -eq 0 ]] && [[ -d "$result" ]]; then
-        cd "$result"
-    else
-        # Otherwise, show the output (error or message)
-        echo "$result"
-        return $exit_code
-    fi
-}
-EOF
-    echo "${GREEN}✓ Wrapper function added to ~/.zshrc${NC}"
+# La función wrapper la genera el propio godev (`godev --init zsh`), no este
+# instalador. Así hay una sola implementación del wrapper y no dos que se
+# desincronizan. `--init --install` hace backup del .zshrc, quita el wrapper
+# viejo si lo hay, y valida el resultado con `zsh -n` antes de reemplazar nada.
+if "$GODEV_SCRIPT" --init --install --yes; then
+    echo "${GREEN}✓ Shell integration configured${NC}"
+else
+    echo "${RED}✗ Could not configure shell integration${NC}"
+    echo "  Run it manually: ${CYAN}godev --init --install${NC}"
+    exit 1
 fi
 
 # ============================================================================
@@ -275,11 +238,12 @@ else
     exit 1
 fi
 
-# Verify wrapper function exists in .zshrc
-if grep -q "^godev()" "$ZSHRC"; then
-    echo "${GREEN}✓ Wrapper function configured${NC}"
+# Verify the shell integration line landed in .zshrc
+if grep -qF 'eval "$(godev --init zsh)"' "$ZSHRC"; then
+    echo "${GREEN}✓ Shell integration configured${NC}"
 else
-    echo "${YELLOW}⚠ Wrapper function not found in .zshrc${NC}"
+    echo "${YELLOW}⚠ Shell integration not found in .zshrc${NC}"
+    echo "  Run: ${CYAN}godev --init --install${NC}"
 fi
 
 # Verify configuration

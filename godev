@@ -3,7 +3,7 @@
 # godev - Development Directory Navigation Tool
 # Version: 1.0.0
 
-VERSION="2.6.1"
+VERSION="2.6.2"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/godev"
 CONFIG_FILE="$CONFIG_DIR/config"
 
@@ -1126,6 +1126,7 @@ ${BOLD}SHELL INTEGRATION:${NC}
     ${CYAN}--init zsh${NC}              ${GRAY}# Print the shell function (use: eval "$(godev --init zsh)")${NC}
     ${CYAN}--init --install${NC}        ${GRAY}# Wire that line into ~/.zshrc (backup + confirmation)${NC}
     ${CYAN}--init --alias NAME${NC}     ${GRAY}# Optionally also define a short alias${NC}
+    ${CYAN}--init --install --yes${NC}  ${GRAY}# Non-interactive (for scripted installs)${NC}
 
     ${GRAY}godev needs a shell function to change your shell's directory:${NC}
     ${GRAY}a child process cannot change its parent's working directory.${NC}
@@ -1226,6 +1227,32 @@ _version_gt() {
     [[ "$1" != "$2" ]] && [[ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n1)" == "$1" ]]
 }
 
+# Determina cómo está instalado godev: "brew" o "standalone".
+#
+# NO se llama en el camino caliente (navegación): sólo desde --update y --version.
+# El primer test es una comparación de strings (gratis); recién si falla se mira
+# $HOMEBREW_PREFIX, y sólo como último recurso se lanza el proceso `brew`.
+_install_kind() {
+    # 1) El binario real vive dentro del Cellar de Homebrew
+    if [[ "$GODEV_BIN_REAL" == */Cellar/godev/* ]]; then
+        echo "brew"
+        return 0
+    fi
+
+    # 2) Cuelga del prefix de Homebrew
+    local prefix="$HOMEBREW_PREFIX"
+    if [[ -z "$prefix" ]] && command -v brew &> /dev/null; then
+        prefix=$(brew --prefix 2>/dev/null)
+    fi
+    if [[ -n "$prefix" ]] && [[ "$GODEV_BIN_REAL" == "${prefix}"/* || "$GODEV_BIN" == "${prefix}"/* ]]; then
+        echo "brew"
+        return 0
+    fi
+
+    echo "standalone"
+    return 0
+}
+
 self_update() {
     if ! command -v curl &> /dev/null && ! command -v wget &> /dev/null; then
         echo "${RED}✗ Necesitas curl o wget instalado para actualizar${NC}" >&2
@@ -1251,6 +1278,20 @@ self_update() {
 
     echo ""
     echo "${BOLD}Hay una versión nueva disponible:${NC} ${YELLOW}${VERSION}${NC} → ${GREEN}${remote_version}${NC}"
+
+    # Bajo Homebrew, godev NO se auto-actualiza: el binario en $(brew --prefix)/bin
+    # es un symlink al Cellar, y sobrescribirlo rompería la contabilidad de brew
+    # (y el próximo `brew upgrade` borraría el cambio igual).
+    if [[ "$(_install_kind)" == "brew" ]]; then
+        echo ""
+        echo "${CYAN}Esta instalación la gestiona Homebrew.${NC} ${GRAY}(${GODEV_BIN})${NC}"
+        echo "${BOLD}Actualizá con:${NC} ${GREEN}brew upgrade godev${NC}"
+        echo ""
+        echo "${GRAY}Si el tap todavía no publicó ${remote_version}, refrescalo primero:${NC}"
+        echo "${GRAY}  brew update${NC}"
+        return 0
+    fi
+
     echo -n "¿Actualizar ahora? (y/N): "
     local answer
     read -k 1 answer < /dev/tty
@@ -1260,11 +1301,19 @@ self_update() {
         return 0
     fi
 
-    # Destino: el binario instalado
-    local dest="$HOME/.local/bin/godev"
+    # Destino: el binario que se está ejecutando ahora mismo, no una ruta adivinada.
+    # Antes esto era "$HOME/.local/bin/godev" fijo, lo que rompía cualquier
+    # instalación fuera de ahí: descargaba la versión nueva al lado de la que
+    # realmente corre y anunciaba éxito sin haber actualizado nada.
+    local dest="$GODEV_BIN"
     local dest_dir="${dest:h}"
     if [[ ! -d "$dest_dir" ]]; then
         echo "${RED}✗ No se encontró el directorio de instalación: $dest_dir${NC}" >&2
+        return 1
+    fi
+    if [[ ! -w "$dest_dir" ]]; then
+        echo "${RED}✗ Sin permiso de escritura en $dest_dir${NC}" >&2
+        echo "${GRAY}  godev no se auto-actualiza con sudo a propósito.${NC}" >&2
         return 1
     fi
 
@@ -1431,7 +1480,7 @@ _godev_warn_alias_collision() {
 
 # Cablea la línea de integración en ~/.zshrc, reemplazando el wrapper viejo.
 install_shell_init() {
-    local alias_name="$1"
+    local alias_name="$1" assume_yes="$2"
     local zshrc="$HOME/.zshrc"
     local -a plan
     local has_old_fn=1 has_init_line=1
@@ -1464,7 +1513,7 @@ install_shell_init() {
     done
 
     # --- Alias --------------------------------------------------------------
-    if [[ -z "$alias_name" ]] && [[ -t 0 || -e /dev/tty ]]; then
+    if [[ -z "$alias_name" && "$assume_yes" != "true" ]] && [[ -t 0 || -e /dev/tty ]]; then
         echo ""
         echo "${GRAY}Un alias corto es opcional. Por defecto no se agrega ninguno.${NC}"
         echo -n "¿Agregar un alias para godev? Escribí el nombre o Enter para omitir: "
@@ -1479,13 +1528,18 @@ install_shell_init() {
         fi
         echo ""
         if _godev_warn_alias_collision "$alias_name" "$zshrc"; then
-            echo -n "${BOLD}Aun así, ¿agregar 'alias ${alias_name}=godev'? (y/N): ${NC}"
-            local ans
-            read -k 1 ans < /dev/tty
-            echo
-            if [[ ! "$ans" =~ ^[yY]$ ]]; then
-                echo "${CYAN}Alias omitido${NC}"
+            if [[ "$assume_yes" == "true" ]]; then
+                echo "${CYAN}Alias omitido (modo no interactivo). Agregalo a mano si lo querés.${NC}"
                 alias_name=""
+            else
+                echo -n "${BOLD}Aun así, ¿agregar 'alias ${alias_name}=godev'? (y/N): ${NC}"
+                local ans
+                read -k 1 ans < /dev/tty
+                echo
+                if [[ ! "$ans" =~ ^[yY]$ ]]; then
+                    echo "${CYAN}Alias omitido${NC}"
+                    alias_name=""
+                fi
             fi
         else
             echo "  ${GREEN}•${NC} Agregar: alias ${alias_name}='godev'"
@@ -1493,14 +1547,16 @@ install_shell_init() {
     fi
 
     # --- Confirmación -------------------------------------------------------
-    echo ""
-    echo -n "${BOLD}¿Continuar? (y/N): ${NC}"
-    local answer
-    read -k 1 answer < /dev/tty
-    echo
-    if [[ ! "$answer" =~ ^[yY]$ ]]; then
-        echo "${CYAN}Cancelado. No se modificó nada.${NC}"
-        return 0
+    if [[ "$assume_yes" != "true" ]]; then
+        echo ""
+        echo -n "${BOLD}¿Continuar? (y/N): ${NC}"
+        local answer
+        read -k 1 answer < /dev/tty
+        echo
+        if [[ ! "$answer" =~ ^[yY]$ ]]; then
+            echo "${CYAN}Cancelado. No se modificó nada.${NC}"
+            return 0
+        fi
     fi
 
     # --- Backup -------------------------------------------------------------
@@ -1582,17 +1638,18 @@ install_shell_init() {
 
 # Dispatcher de `godev --init [zsh] [--install] [--alias NOMBRE]`
 shell_init_command() {
-    local shell_name="" do_install="false" alias_name=""
+    local shell_name="" do_install="false" alias_name="" assume_yes="false"
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --install) do_install="true" ;;
+            --yes|-y)  assume_yes="true" ;;
             --alias)   shift; alias_name="$1" ;;
             zsh|bash|fish|sh) shell_name="$1" ;;
             "") ;;
             *)
                 echo "${RED}✗ Argumento desconocido para --init: $1${NC}" >&2
-                echo "${GRAY}  Uso: godev --init [zsh] [--install] [--alias NOMBRE]${NC}" >&2
+                echo "${GRAY}  Uso: godev --init [zsh] [--install] [--yes] [--alias NOMBRE]${NC}" >&2
                 return 1
                 ;;
         esac
@@ -1600,7 +1657,7 @@ shell_init_command() {
     done
 
     if [[ "$do_install" == "true" ]]; then
-        install_shell_init "$alias_name"
+        install_shell_init "$alias_name" "$assume_yes"
         return $?
     fi
 
