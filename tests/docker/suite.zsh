@@ -211,6 +211,57 @@ res=$(zsh -c 'source ~/.zshrc >/dev/null 2>&1; godev proj1 >/dev/null 2>&1; echo
 check "navega tras instalación limpia" "$res" "/home/tester/work/proj1"
 
 echo ""
+echo "═══ 12. migración desde una instalación pre-2.7.0 real ═══"
+# Reproduce el caso que falló en la vida real: el wrapper viejo llama a
+# ~/.local/bin/godev por ruta absoluta, y ese binario no conoce --init.
+rm -rf ~/.local/bin/godev ~/brew
+# El test 11 dejó la config apuntando a ~/work; restaurar la base de esta suite
+mkdir -p ~/.config/godev
+cat > ~/.config/godev/config << 'CFG'
+GODEV_BASE_DIR="/home/tester/dev"
+GODEV_FZF_ENABLED="false"
+CFG
+git -C /src show v2.6.0:godev > ~/.local/bin/godev 2>/dev/null && chmod +x ~/.local/bin/godev
+mkdir -p ~/brew/Cellar/godev/2.7.0/bin ~/brew/bin
+cp /src/godev ~/brew/Cellar/godev/2.7.0/bin/godev
+chmod +x ~/brew/Cellar/godev/2.7.0/bin/godev
+ln -sf ~/brew/Cellar/godev/2.7.0/bin/godev ~/brew/bin/godev
+cat > ~/.zshrc << 'EOF'
+export PATH="$HOME/brew/bin:$PATH:$HOME/.local/bin"
+
+# godev - Function wrapper (added by installer)
+godev() {
+    local result
+    if [[ "$1" =~ ^- ]]; then
+        command ~/.local/bin/godev "$@"
+        return $?
+    fi
+    result=$(command ~/.local/bin/godev "$@")
+    local exit_code=$?
+    if [[ $exit_code -eq 0 ]] && [[ -d "$result" ]]; then
+        cd "$result"
+    else
+        echo "$result"
+        return $exit_code
+    fi
+}
+EOF
+
+# El síntoma: `godev --init` a través del wrapper viejo NO funciona
+out=$(zsh -c 'source ~/.zshrc >/dev/null 2>&1; godev --init --install --yes' 2>&1 </dev/null)
+[[ "$out" == *"Integración instalada"* ]] && bad "el wrapper viejo alcanzó --init (inesperado)" || ok "reproducido: el wrapper viejo NO llega a --init"
+
+# El arreglo documentado: llamar al binario nuevo por ruta explícita
+out=$(~/brew/bin/godev --init --install --yes 2>&1 </dev/null)
+check "la ruta explícita sí funciona" "$out" "Integración instalada"
+check "avisa del binario viejo (shadowing)" "$out" "/home/tester/.local/bin/godev"
+rm -f ~/.local/bin/godev
+res=$(zsh -c 'source ~/.zshrc >/dev/null 2>&1; godev gamma >/dev/null 2>&1; echo $PWD')
+check "navega tras migrar" "$res" "/home/tester/dev/gamma"
+res=$(zsh -c 'source ~/.zshrc >/dev/null 2>&1; godev --init zsh | grep godev_bin=')
+check "el wrapper ya apunta a la copia de brew" "$res" "/home/tester/brew/bin/godev"
+
+echo ""
 echo "═══════════════════════════════════════"
 echo "  PASS: $PASS   FAIL: $FAIL"
 echo "═══════════════════════════════════════"
