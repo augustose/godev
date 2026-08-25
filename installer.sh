@@ -239,7 +239,7 @@ else
 fi
 
 # Verify the shell integration line landed in .zshrc
-if grep -qF 'eval "$(godev --init zsh)"' "$ZSHRC"; then
+if grep -qE '^eval "\$\((command )?godev --init zsh\)"$' "$ZSHRC"; then
     echo "${GREEN}✓ Shell integration configured${NC}"
 else
     echo "${YELLOW}⚠ Shell integration not found in .zshrc${NC}"

@@ -21,7 +21,7 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
 out=$(~/.local/bin/godev --init --install --yes 2>&1)
 check "instala sin preguntar" "$out" "✓ Integración instalada"
 check "reporta el binario" "$out" "/home/tester/.local/bin/godev"
-grep -qF 'eval "$(godev --init zsh)"' ~/.zshrc && ok "línea eval presente" || bad "línea eval ausente"
+grep -qE '^eval "\$\((command )?godev --init zsh\)"$' ~/.zshrc && ok "línea eval presente" || bad "línea eval ausente"
 [[ -n "$(find ~ -maxdepth 1 -name ".zshrc.backup-*" 2>/dev/null)" ]] && ok "backup creado" || bad "backup ausente"
 zsh -n ~/.zshrc && ok ".zshrc parsea" || bad ".zshrc roto"
 
@@ -34,9 +34,9 @@ check "--version pasa derecho" "$res" "godev version"
 
 echo ""
 echo "═══ 3. idempotencia: correr --install dos veces ═══"
-before=$(grep -cF 'eval "$(godev --init zsh)"' ~/.zshrc)
+before=$(grep -c 'godev --init zsh' ~/.zshrc)
 ~/.local/bin/godev --init --install --yes >/dev/null 2>&1
-after=$(grep -cF 'eval "$(godev --init zsh)"' ~/.zshrc)
+after=$(grep -c 'godev --init zsh' ~/.zshrc)
 [[ "$before" == "1" && "$after" == "1" ]] && ok "no duplica la línea ($before -> $after)" || bad "duplicó: $before -> $after"
 
 echo ""
@@ -68,7 +68,7 @@ EOF
 grep -q '^godev() {' ~/.zshrc && bad "quedó la función vieja" || ok "función vieja removida"
 grep -qF "alias gd='godev'" ~/.zshrc && ok "alias gd del usuario SOBREVIVE" || bad "se perdió alias gd"
 grep -qF "alias mio=" ~/.zshrc && ok "otras líneas intactas" || bad "se perdieron líneas"
-grep -qF 'eval "$(godev --init zsh)"' ~/.zshrc && ok "línea nueva presente" || bad "falta línea nueva"
+grep -qE '^eval "\$\((command )?godev --init zsh\)"$' ~/.zshrc && ok "línea nueva presente" || bad "falta línea nueva"
 res=$(zsh -c 'source ~/.zshrc >/dev/null 2>&1; godev beta >/dev/null 2>&1; echo $PWD')
 check "sigue navegando tras migrar" "$res" "/home/tester/dev/beta"
 
@@ -146,7 +146,7 @@ sys.stdout.write(buf.decode("utf-8", "replace"))
 check "pregunta por el alias" "$out" "¿Agregar un alias"
 check "pide confirmación" "$out" "¿Continuar?"
 check "instala tras confirmar" "$out" "Integración instalada"
-grep -qF 'eval "$(godev --init zsh)"' ~/.zshrc && ok "línea escrita en modo interactivo" || bad "no escribió la línea"
+grep -qE '^eval "\$\((command )?godev --init zsh\)"$' ~/.zshrc && ok "línea escrita en modo interactivo" || bad "no escribió la línea"
 grep -q "^alias " ~/.zshrc && bad "agregó un alias sin pedirlo" || ok "sin alias por defecto"
 
 echo ""
@@ -205,7 +205,7 @@ sys.stdout.write(buf.decode("utf-8", "replace"))
 cd ~
 check "instalador delega la integración" "$out" "Shell integration configured"
 check "verificación post-install OK" "$out" "Installation completed"
-grep -qF 'eval "$(godev --init zsh)"' ~/.zshrc && ok "installer dejó la línea eval" || bad "installer no dejó la línea"
+grep -qE '^eval "\$\((command )?godev --init zsh\)"$' ~/.zshrc && ok "installer dejó la línea eval" || bad "installer no dejó la línea"
 grep -q '^godev() {' ~/.zshrc && bad "installer escribió la función vieja" || ok "installer NO escribió función literal"
 res=$(zsh -c 'source ~/.zshrc >/dev/null 2>&1; godev proj1 >/dev/null 2>&1; echo $PWD')
 check "navega tras instalación limpia" "$res" "/home/tester/work/proj1"
@@ -260,6 +260,68 @@ res=$(zsh -c 'source ~/.zshrc >/dev/null 2>&1; godev gamma >/dev/null 2>&1; echo
 check "navega tras migrar" "$res" "/home/tester/dev/gamma"
 res=$(zsh -c 'source ~/.zshrc >/dev/null 2>&1; godev --init zsh | grep godev_bin=')
 check "el wrapper ya apunta a la copia de brew" "$res" "/home/tester/brew/bin/godev"
+
+echo ""
+echo "═══ 13. shell envenenado: función vieja cargada al sourcear ═══"
+# Reproduce el fallo real: se migra desde un shell que YA tiene la función
+# vieja definida. Sourcear .zshrc hace que esa función intercepte el propio
+# eval de la integración nueva, el eval recibe vacío y la vieja sobrevive.
+rm -rf ~/.local/bin/godev ~/brew
+mkdir -p ~/.local/bin ~/brew/Cellar/godev/2.7.0/bin ~/brew/bin
+cat > ~/.config/godev/config << 'CFG'
+GODEV_BASE_DIR="/home/tester/dev"
+GODEV_FZF_ENABLED="false"
+CFG
+cp /src/godev ~/brew/Cellar/godev/2.7.0/bin/godev
+chmod +x ~/brew/Cellar/godev/2.7.0/bin/godev
+ln -sf ~/brew/Cellar/godev/2.7.0/bin/godev ~/brew/bin/godev
+git -C /src show v2.6.0:godev > ~/.local/bin/godev 2>/dev/null && chmod +x ~/.local/bin/godev
+cat > ~/.zshrc << 'EOF'
+export PATH="$HOME/brew/bin:$PATH:$HOME/.local/bin"
+
+# godev - Function wrapper (added by installer)
+godev() {
+    local result
+    if [[ "$1" =~ ^- ]]; then
+        command ~/.local/bin/godev "$@"
+        return $?
+    fi
+    result=$(command ~/.local/bin/godev "$@")
+    local exit_code=$?
+    if [[ $exit_code -eq 0 ]] && [[ -d "$result" ]]; then
+        cd "$result"
+    else
+        echo "$result"
+        return $exit_code
+    fi
+}
+EOF
+~/brew/bin/godev --init --install --yes >/dev/null 2>&1
+rm -f ~/.local/bin/godev
+
+check "la línea usa 'command'" "$(grep '^eval ' ~/.zshrc)" 'command godev --init zsh'
+
+# El escenario exacto: shell con la función vieja YA cargada, que sourcea .zshrc
+res=$(zsh -c '
+godev() { command ~/.local/bin/godev "$@"; }   # la función vieja, ya cargada
+source ~/.zshrc >/dev/null 2>&1                 # esto la debe reemplazar
+godev --version 2>&1')
+check "sobrevive al shell envenenado" "$res" "godev version"
+[[ "$res" == *"no such file or directory"* ]] && bad "la función vieja secuestró el eval" || ok "la función vieja NO secuestró el eval"
+
+# Y navegar sigue funcionando en ese shell
+res=$(zsh -c '
+godev() { command ~/.local/bin/godev "$@"; }
+source ~/.zshrc >/dev/null 2>&1
+godev alpha >/dev/null 2>&1; echo $PWD')
+check "navega tras el rescate" "$res" "/home/tester/dev/alpha"
+
+# Regresión: la forma vieja de la línea (sin `command`) debe ser reemplazada
+printf '# base\n%s\n' 'eval "$(godev --init zsh)"' > ~/.zshrc
+~/brew/bin/godev --init --install --yes >/dev/null 2>&1
+n=$(grep -c 'godev --init zsh' ~/.zshrc)
+[[ "$n" == "1" ]] && ok "la línea vieja se reemplaza, no se duplica" || bad "quedaron $n líneas"
+check "y queda en la forma nueva" "$(grep '^eval ' ~/.zshrc)" 'command godev'
 
 echo ""
 echo "═══════════════════════════════════════"

@@ -3,12 +3,12 @@
 # This file lives here for review and testing; the published copy belongs in
 # the tap repository at Formula/godev.rb. See docs/plans for the rationale.
 #
-# sha256 corresponds to the v2.7.0 release tarball:
-#   curl -fsSL https://github.com/augustose/godev/archive/refs/tags/v2.7.0.tar.gz | shasum -a 256
+# sha256 corresponds to the v2.7.1 release tarball:
+#   curl -fsSL https://github.com/augustose/godev/archive/refs/tags/v2.7.1.tar.gz | shasum -a 256
 class Godev < Formula
   desc "Navigate 100+ development projects in seconds with fuzzy search"
   homepage "https://github.com/augustose/godev"
-  url "https://github.com/augustose/godev/archive/refs/tags/v2.7.0.tar.gz"
+  url "https://github.com/augustose/godev/archive/refs/tags/v2.7.1.tar.gz"
   sha256 "c739ecd7754bca87d0e15a0b4aed30b4095466067472720ec4460ecaae9546cd"
   license "MIT"
   head "https://github.com/augustose/godev.git", branch: "main"
@@ -30,7 +30,7 @@ class Godev < Formula
         godev --init --install && source ~/.zshrc
 
       Or add this line to ~/.zshrc yourself:
-        eval "$(godev --init zsh)"
+        eval "$(command godev --init zsh)"
 
       Homebrew-managed installs do not self-update: use `brew upgrade godev`.
     EOS

@@ -167,7 +167,7 @@ confirmation first, and cancelling leaves the file byte-for-byte untouched.
 If you would rather do it by hand, add this line to your `~/.zshrc`:
 
 ```zsh
-eval "$(godev --init zsh)"
+eval "$(command godev --init zsh)"
 ```
 
 Every tool in this category — `zoxide`, `direnv`, `starship`, `fzf` — works the same way.
@@ -204,7 +204,7 @@ chmod +x ~/.local/bin/godev
 
 Or add the line yourself:
 ```zsh
-echo 'eval "$(godev --init zsh)"' >> ~/.zshrc
+echo 'eval "$(command godev --init zsh)"' >> ~/.zshrc
 ```
 
 3. Reload and configure
@@ -236,10 +236,14 @@ brew install augustose/godev/godev
 # 3. Remove the old binary (your config in ~/.config/godev is NOT touched)
 rm ~/.local/bin/godev
 
-# 4. Reload and verify
-source ~/.zshrc
+# 4. Open a NEW terminal, then verify
 godev --version
 ```
+
+> **Open a new terminal for step 4 — `source ~/.zshrc` is not enough.** The old
+> `godev` function is still defined in your current session, and sourcing does not
+> remove it. It would intercept the new integration line before it can replace
+> itself. If you would rather stay in the same shell: `unset -f godev && source ~/.zshrc`.
 
 > **Why the full path in step 2?** Your current `godev` is still the old shell
 > function, and it calls `~/.local/bin/godev` by absolute path — the pre-2.7.0

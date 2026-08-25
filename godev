@@ -3,7 +3,7 @@
 # godev - Development Directory Navigation Tool
 # Version: 1.0.0
 
-VERSION="2.7.0"
+VERSION="2.7.1"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/godev"
 CONFIG_FILE="$CONFIG_DIR/config"
 
@@ -1377,7 +1377,10 @@ EOF
 
 # La línea que se cablea en ~/.zshrc y el comentario que la marca como nuestra.
 GODEV_INIT_MARKER="# godev - shell integration (godev --init --install)"
-GODEV_INIT_LINE='eval "$(godev --init zsh)"'
+# `command` es deliberado: si una función godev() vieja sigue definida en la
+# sesión (p.ej. al sourcear .zshrc tras migrar), sin él la llamada la secuestra,
+# el eval recibe vacío y la función vieja sobrevive. `command` va directo al PATH.
+GODEV_INIT_LINE='eval "$(command godev --init zsh)"'
 
 # Aliases del plugin `git` de oh-my-zsh que se romperían en silencio si se los
 # pisa. La lista no pretende ser exhaustiva: cubre los de uso diario.
@@ -1488,7 +1491,7 @@ install_shell_init() {
     [[ -f "$zshrc" ]] || touch "$zshrc"
 
     grep -qE '^godev\(\) \{' "$zshrc" 2>/dev/null && has_old_fn=0
-    grep -qF "$GODEV_INIT_LINE" "$zshrc" 2>/dev/null && has_init_line=0
+    grep -qE '^eval "\$\((command )?godev --init zsh\)"$' "$zshrc" 2>/dev/null && has_init_line=0
 
     # --- Plan ---------------------------------------------------------------
     echo ""
@@ -1579,6 +1582,7 @@ install_shell_init() {
     awk -v marker="$GODEV_INIT_MARKER" -v initline="$GODEV_INIT_LINE" '
         $0 == marker { next }
         $0 == initline { next }
+        /^eval "\$\((command )?godev --init zsh\)"$/ { next }
         /^# godev - Function wrapper \(added by installer\)$/ { next }
         /^# Generado por .godev --init zsh. — no editar a mano\.$/ { next }
         /^godev\(\) \{/ { inblock = 1; next }
@@ -1632,7 +1636,15 @@ install_shell_init() {
     fi
 
     echo ""
-    echo "${CYAN}Recargá tu shell:${NC} source ~/.zshrc"
+    if (( ${+functions[godev]} )); then
+        # Hay una función godev definida en el shell que invocó esto. Si es la
+        # vieja, un `source` la haría interceptar el propio eval de arriba.
+        echo "${CYAN}Abrí una terminal nueva${NC} ${GRAY}(o: exec zsh)${NC}"
+        echo "${GRAY}Un simple 'source ~/.zshrc' no alcanza: la función godev que ya${NC}"
+        echo "${GRAY}está cargada en esta sesión interceptaría la nueva integración.${NC}"
+    else
+        echo "${CYAN}Recargá tu shell:${NC} source ~/.zshrc"
+    fi
     return 0
 }
 
