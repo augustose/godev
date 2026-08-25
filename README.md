@@ -66,6 +66,13 @@ Selecciona: 1
 
 ## ⚡ Quick Start
 
+### Homebrew (recommended)
+
+```zsh
+brew install augustose/godev/godev
+godev --init --install && source ~/.zshrc
+```
+
 ### One-line installation
 
 ```zsh
@@ -134,7 +141,38 @@ godev integrates seamlessly with [**junegunn/fzf**](https://github.com/junegunn/
 
 ## 📦 Installation
 
-### Automatic (Recommended)
+### Homebrew (recommended)
+
+```zsh
+brew install augustose/godev/godev
+```
+
+Then wire up the shell integration — one command, once:
+
+```zsh
+godev --init --install && source ~/.zshrc
+```
+
+### Why the extra step?
+
+godev changes your shell's current directory, and **a child process cannot change
+its parent's working directory** — that is how processes work, not a limitation of
+godev. So it needs a small function defined *in* your shell.
+
+Homebrew never edits your `~/.zshrc`, by policy. `godev --init --install` does it for
+you instead: it backs up your `~/.zshrc`, adds one line, validates the result with
+`zsh -n` before replacing anything, and tells you exactly what it changed. It asks for
+confirmation first, and cancelling leaves the file byte-for-byte untouched.
+
+If you would rather do it by hand, add this line to your `~/.zshrc`:
+
+```zsh
+eval "$(godev --init zsh)"
+```
+
+Every tool in this category — `zoxide`, `direnv`, `starship`, `fzf` — works the same way.
+
+### Automatic script install
 
 ```zsh
 curl -fsSL https://raw.githubusercontent.com/augustose/godev/main/installer.sh | zsh
@@ -142,7 +180,7 @@ curl -fsSL https://raw.githubusercontent.com/augustose/godev/main/installer.sh |
 
 **What it does:**
 - ✅ Installs godev to `~/.local/bin`
-- ✅ Configures ZSH wrapper function
+- ✅ Configures the ZSH shell integration
 - ✅ Detects and integrates with FZF
 - ✅ Sets up your projects directory
 - ✅ Creates backups automatically
@@ -159,27 +197,14 @@ curl -fsSL https://raw.githubusercontent.com/augustose/godev/main/godev -o ~/.lo
 chmod +x ~/.local/bin/godev
 ```
 
-2. Add wrapper function to ~/.zshrc
+2. Add the shell integration to ~/.zshrc
 ```zsh
-cat >> ~/.zshrc << 'EOF'
+~/.local/bin/godev --init --install
+```
 
-# godev - Function wrapper
-godev() {
-    local result
-    if [[ "$1" =~ ^- ]]; then
-        command ~/.local/bin/godev "$@"
-        return $?
-    fi
-    result=$(command ~/.local/bin/godev "$@")
-    local exit_code=$?
-    if [[ $exit_code -eq 0 ]] && [[ -d "$result" ]]; then
-        cd "$result"
-    else
-        echo "$result"
-        return $exit_code
-    fi
-}
-EOF
+Or add the line yourself:
+```zsh
+echo 'eval "$(godev --init zsh)"' >> ~/.zshrc
 ```
 
 3. Reload and configure
@@ -189,6 +214,45 @@ godev --setup
 ```
 
 </details>
+
+### Already installed via the script? Migrating to Homebrew
+
+**Your configuration is preserved automatically.** `~/.config/godev/` follows the XDG
+spec and the Homebrew build reads the exact same path, so your base directory, cached
+dashboard and version info all survive. There is nothing to export.
+
+What does need replacing is the old wrapper: it calls `~/.local/bin/godev` by absolute
+path, so it would keep running the old copy and ignore Homebrew entirely.
+
+```zsh
+# 1. Install via Homebrew
+brew install augustose/godev/godev
+
+# 2. Replace the old wrapper. This backs up your ~/.zshrc, removes the old
+#    godev() function, and warns you about any leftover copies on your PATH.
+godev --init --install
+
+# 3. Remove the old binary (your config in ~/.config/godev is NOT touched)
+rm ~/.local/bin/godev
+
+# 4. Reload and verify
+source ~/.zshrc
+godev --version
+```
+
+A few notes:
+
+- **Do not delete `~/.config/godev/`** — that is where your settings live.
+- An `alias gd='godev'` you added yourself keeps working, and `--init --install`
+  leaves it alone. It only replaces the wrapper function.
+- If the installer had added a `~/.local/bin` line to your `PATH` and nothing else
+  uses it, you can drop it — but that is your call, and godev will not do it for you.
+- Any `godev.backup-*` files left in `~/.local/bin/` by past `--update` runs are
+  yours to keep or remove. godev never deletes them.
+
+Once installed via Homebrew, `godev --update` will not self-update anymore. It tells
+you a new version exists and points you at `brew upgrade godev`, which is the right
+tool for a Homebrew-managed install.
 
 ### Installing FZF (Optional but Recommended)
 
@@ -228,12 +292,22 @@ godev <pattern> -l        # List projects matching pattern
 godev --cache             # Open HTML dashboard in browser (generates it if missing)
 godev --cache --update    # Regenerate the HTML with fresh data, then open it
 
+# Shell integration
+godev --init zsh          # Print the shell function
+godev --init --install    # Wire it into ~/.zshrc (backup + confirmation)
+godev --init --alias gg   # Optionally define a short alias (opt-in)
+
 # Other
 godev --update            # Check GitHub for a new version and install it
 godev --setup             # Configure or reconfigure
 godev --version, -v       # Show version
 godev --help, -h          # Show help
 ```
+
+> **On short aliases:** godev never claims one for you. `gd` in particular is
+> `git diff` in oh-my-zsh's git plugin, and taking it would break that *silently*.
+> `--init --alias NAME` is opt-in, defaults to off, and warns you before it
+> shadows something you already have.
 
 ### HTML Dashboard
 
@@ -268,12 +342,21 @@ before installing. The update is **safe by design**:
 
 - Downloads from the release **tag**, so the version announced is exactly the one installed.
 - Validates the downloaded script (syntax + sanity check) before touching anything.
-- Backs up your current binary to `~/.local/bin/godev.backup-<timestamp>` and
+- Backs up your current binary next to itself as `godev.backup-<timestamp>` and
   replaces it atomically.
 - Only contacts the network when you run `--update` — never during normal navigation.
 
-Nothing else is touched: your `~/.zshrc` wrapper, config, and projects stay as they are.
+Nothing else is touched: your `~/.zshrc`, config, and projects stay as they are.
 After updating, reload your shell with `source ~/.zshrc`.
+
+**Installed via Homebrew?** `--update` does not self-update — and that is deliberate.
+The binary in `$(brew --prefix)/bin` is a symlink into the Cellar; overwriting it would
+break Homebrew's bookkeeping, and the next `brew upgrade` would silently discard the
+change anyway. Instead, `--update` reports the new version and points you at:
+
+```zsh
+brew upgrade godev
+```
 
 > **Note:** `--update` is available from **v2.6.0** onward. On older versions,
 > re-run the [installer](#-installation) once to get it.
