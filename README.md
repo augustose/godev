@@ -228,9 +228,10 @@ path, so it would keep running the old copy and ignore Homebrew entirely.
 # 1. Install via Homebrew
 brew install augustose/godev/godev
 
-# 2. Replace the old wrapper. This backs up your ~/.zshrc, removes the old
-#    godev() function, and warns you about any leftover copies on your PATH.
-godev --init --install
+# 2. Replace the old wrapper. Call the Homebrew binary by its full path --
+#    see the note below for why. This backs up your ~/.zshrc, removes the old
+#    godev() function, and warns you about leftover copies on your PATH.
+"$(brew --prefix)/bin/godev" --init --install
 
 # 3. Remove the old binary (your config in ~/.config/godev is NOT touched)
 rm ~/.local/bin/godev
@@ -239,6 +240,12 @@ rm ~/.local/bin/godev
 source ~/.zshrc
 godev --version
 ```
+
+> **Why the full path in step 2?** Your current `godev` is still the old shell
+> function, and it calls `~/.local/bin/godev` by absolute path — the pre-2.7.0
+> binary, which has no `--init` flag and would treat it as a project name. You
+> need to reach the Homebrew binary directly, once. After step 4, plain
+> `godev --init` works normally.
 
 A few notes:
 
