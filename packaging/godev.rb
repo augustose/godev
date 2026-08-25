@@ -3,13 +3,13 @@
 # This file lives here for review and testing; the published copy belongs in
 # the tap repository at Formula/godev.rb. See docs/plans for the rationale.
 #
-# sha256 corresponds to the v2.7.1 release tarball:
-#   curl -fsSL https://github.com/augustose/godev/archive/refs/tags/v2.7.1.tar.gz | shasum -a 256
+# sha256 corresponds to the v2.8.0 release tarball:
+#   curl -fsSL https://github.com/augustose/godev/archive/refs/tags/v2.8.0.tar.gz | shasum -a 256
 class Godev < Formula
   desc "Navigate 100+ development projects in seconds with fuzzy search"
   homepage "https://github.com/augustose/godev"
-  url "https://github.com/augustose/godev/archive/refs/tags/v2.7.1.tar.gz"
-  sha256 "222d1cac697969d0606dae9e7a7a6c7a660451d0668c1079f3632dcb873b80b7"
+  url "https://github.com/augustose/godev/archive/refs/tags/v2.8.0.tar.gz"
+  sha256 "f355a03d37b16bd9ec864e757f77687c43358d255dc3ead677ccc2201e78631d"
   license "MIT"
   head "https://github.com/augustose/godev.git", branch: "main"
 
