@@ -1,7 +1,9 @@
 # Publicar godev en Homebrew
 
-Pasos para poner el tap en línea. Nada de esto está hecho todavía: hasta que se
-complete, `brew install augustose/godev/godev` devuelve "No available formula".
+**Estado: publicado.** El tap vive en
+[augustose/homebrew-godev](https://github.com/augustose/homebrew-godev) y
+`brew install augustose/godev/godev` funciona. Lo que sigue queda como
+referencia para los próximos releases.
 
 ## 1. Cortar el release
 
@@ -65,3 +67,24 @@ homebrew-core exige notoriedad (~75 stars / 30 forks / 30 watchers) y revisión 
 mantenedores. El tap propio no tiene requisitos y se publica hoy. La postulación a
 core queda para cuando el proyecto tenga tracción; el Formula ya está escrito para
 pasar `brew audit --strict`.
+
+## Aprendizajes del primer release
+
+- **`assert_match` necesita String o Regexp, no `Pathname`.** `assert_match
+  bin/"godev", init` falla con *"Expected #<Pathname:...> to respond to #=~"*.
+  Interpolar: `assert_match "#{bin}/godev", init`. Sólo aparece al correr
+  `brew test` contra la instalación real — `ruby -c` no lo detecta.
+- **`brew audit` puede romper `brew install`.** Activa el modo developer solo y
+  construye el bundle de gems vendorizado. En esta máquina el `json 2.21.2` que
+  pinea el `Gemfile.lock` de Homebrew es incompatible con la portable-ruby 4.0.6
+  (que trae json 2.18.0 de stdlib), y deja `brew install`/`config` caídos con
+  *"undefined method 'default_sort_keys_proc='"*. Se sale quitando el gem:
+
+  ```bash
+  B=/opt/homebrew/Library/Homebrew/vendor/bundle/ruby/4.0.0
+  rm -rf "$B/gems/json-2.21.2" "$B/extensions/arm64-darwin-20/4.0.0-static/json-2.21.2"
+  git -C "$(brew --repository)" config --unset homebrew.devcmdrun
+  ```
+
+  Por eso `brew audit` **no** está en el camino crítico de validación. `brew
+  install --build-from-source` + `brew test` sí, y alcanzan.

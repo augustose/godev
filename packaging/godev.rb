@@ -3,13 +3,13 @@
 # This file lives here for review and testing; the published copy belongs in
 # the tap repository at Formula/godev.rb. See docs/plans for the rationale.
 #
-# Before publishing, replace the sha256 with the digest of the release tarball:
+# sha256 corresponds to the v2.7.0 release tarball:
 #   curl -fsSL https://github.com/augustose/godev/archive/refs/tags/v2.7.0.tar.gz | shasum -a 256
 class Godev < Formula
   desc "Navigate 100+ development projects in seconds with fuzzy search"
   homepage "https://github.com/augustose/godev"
   url "https://github.com/augustose/godev/archive/refs/tags/v2.7.0.tar.gz"
-  sha256 "REPLACE_WITH_TARBALL_SHA256"
+  sha256 "c739ecd7754bca87d0e15a0b4aed30b4095466067472720ec4460ecaae9546cd"
   license "MIT"
   head "https://github.com/augustose/godev.git", branch: "main"
 
@@ -43,6 +43,6 @@ class Godev < Formula
     # The shell integration must emit a function that points at this binary.
     init = shell_output("#{bin}/godev --init zsh")
     assert_match "godev()", init
-    assert_match bin/"godev", init
+    assert_match "#{bin}/godev", init
   end
 end
