@@ -3,7 +3,7 @@
 # godev - Development Directory Navigation Tool
 # Version: 1.0.0
 
-VERSION="2.7.1"
+VERSION="2.8.0"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/godev"
 CONFIG_FILE="$CONFIG_DIR/config"
 
@@ -436,14 +436,14 @@ navigate_to_project() {
             
             if [[ -z "$project_path" ]]; then
                 echo "" >&2
-                echo "${YELLOW}Selección cancelada${NC}" >&2
+                echo "${YELLOW}Selection cancelled${NC}" >&2
                 return 1
             fi
             
             # Convertir a ruta absoluta
             project_path="$GODEV_BASE_DIR/$project_path"
         else
-            echo "${YELLOW}💡 Instala FZF para menú interactivo: brew install fzf${NC}" >&2
+            echo "${YELLOW}💡 Install FZF for an interactive menu: brew install fzf${NC}" >&2
             echo ""
             list_projects --simple
             return 1
@@ -854,7 +854,7 @@ generate_html_cache() {
     local modified=0
     local rows=""
 
-    echo "${CYAN}Escaneando proyectos...${NC}" >&2
+    echo "${CYAN}Scanning projects...${NC}" >&2
 
     local -a projects_data
     while IFS= read -r project; do
@@ -1064,7 +1064,7 @@ document.getElementById('filter').addEventListener('input', function () {
 EOF
 
     echo "${GREEN}✓ HTML cache generado: ${HTML_CACHE_FILE}${NC}" >&2
-    echo "  ${GRAY}${total} proyectos (${with_git} con git, ${modified} modificados)${NC}" >&2
+    echo "  ${GRAY}${total} projects (${with_git} with git, ${modified} modified)${NC}" >&2
     return 0
 }
 
@@ -1255,16 +1255,16 @@ _install_kind() {
 
 self_update() {
     if ! command -v curl &> /dev/null && ! command -v wget &> /dev/null; then
-        echo "${RED}✗ Necesitas curl o wget instalado para actualizar${NC}" >&2
+        echo "${RED}✗ You need curl or wget installed to update${NC}" >&2
         return 1
     fi
 
-    echo "${CYAN}Buscando la última versión en GitHub (${GODEV_REPO})...${NC}"
+    echo "${CYAN}Checking GitHub for the latest version (${GODEV_REPO})...${NC}"
 
     local resolved remote_version remote_ref
     resolved=$(_resolve_remote)
     if [[ -z "$resolved" ]]; then
-        echo "${RED}✗ No se pudo contactar GitHub para averiguar la última versión${NC}" >&2
+        echo "${RED}✗ Could not reach GitHub to look up the latest version${NC}" >&2
         return 1
     fi
     remote_version="${resolved%%|*}"
@@ -1272,32 +1272,32 @@ self_update() {
 
     # Comparar
     if ! _version_gt "$remote_version" "$VERSION"; then
-        echo "${GREEN}✓ Ya tienes la última versión (${VERSION})${NC}"
+        echo "${GREEN}✓ Already on the latest version (${VERSION})${NC}"
         return 0
     fi
 
     echo ""
-    echo "${BOLD}Hay una versión nueva disponible:${NC} ${YELLOW}${VERSION}${NC} → ${GREEN}${remote_version}${NC}"
+    echo "${BOLD}A new version is available:${NC} ${YELLOW}${VERSION}${NC} → ${GREEN}${remote_version}${NC}"
 
     # Bajo Homebrew, godev NO se auto-actualiza: el binario en $(brew --prefix)/bin
     # es un symlink al Cellar, y sobrescribirlo rompería la contabilidad de brew
     # (y el próximo `brew upgrade` borraría el cambio igual).
     if [[ "$(_install_kind)" == "brew" ]]; then
         echo ""
-        echo "${CYAN}Esta instalación la gestiona Homebrew.${NC} ${GRAY}(${GODEV_BIN})${NC}"
-        echo "${BOLD}Actualizá con:${NC} ${GREEN}brew upgrade godev${NC}"
+        echo "${CYAN}This install is managed by Homebrew.${NC} ${GRAY}(${GODEV_BIN})${NC}"
+        echo "${BOLD}Upgrade with:${NC} ${GREEN}brew upgrade godev${NC}"
         echo ""
-        echo "${GRAY}Si el tap todavía no publicó ${remote_version}, refrescalo primero:${NC}"
+        echo "${GRAY}If the tap has not published ${remote_version} yet, refresh it first:${NC}"
         echo "${GRAY}  brew update${NC}"
         return 0
     fi
 
-    echo -n "¿Actualizar ahora? (y/N): "
+    echo -n "Update now? (y/N): "
     local answer
     read -k 1 answer < /dev/tty
     echo
     if [[ ! "$answer" =~ ^[yY]$ ]]; then
-        echo "${CYAN}Actualización cancelada${NC}"
+        echo "${CYAN}Update cancelled${NC}"
         return 0
     fi
 
@@ -1308,12 +1308,12 @@ self_update() {
     local dest="$GODEV_BIN"
     local dest_dir="${dest:h}"
     if [[ ! -d "$dest_dir" ]]; then
-        echo "${RED}✗ No se encontró el directorio de instalación: $dest_dir${NC}" >&2
+        echo "${RED}✗ Install directory not found: $dest_dir${NC}" >&2
         return 1
     fi
     if [[ ! -w "$dest_dir" ]]; then
-        echo "${RED}✗ Sin permiso de escritura en $dest_dir${NC}" >&2
-        echo "${GRAY}  godev no se auto-actualiza con sudo a propósito.${NC}" >&2
+        echo "${RED}✗ No write permission in $dest_dir${NC}" >&2
+        echo "${GRAY}  godev deliberately does not self-update with sudo.${NC}" >&2
         return 1
     fi
 
@@ -1324,22 +1324,22 @@ self_update() {
         return 1
     }
 
-    echo "${CYAN}Descargando godev ${remote_version} (${remote_ref})...${NC}"
+    echo "${CYAN}Downloading godev ${remote_version} (${remote_ref})...${NC}"
     if ! _download "https://raw.githubusercontent.com/${GODEV_REPO}/${remote_ref}/godev" "$tmpfile"; then
         rm -f "$tmpfile"
-        echo "${RED}✗ Falló la descarga${NC}" >&2
+        echo "${RED}✗ Download failed${NC}" >&2
         return 1
     fi
 
     # Validar: sintaxis y que sea realmente el script godev
     if ! zsh -n "$tmpfile" 2>/dev/null; then
         rm -f "$tmpfile"
-        echo "${RED}✗ El archivo descargado tiene errores de sintaxis; se aborta sin tocar tu instalación${NC}" >&2
+        echo "${RED}✗ The downloaded file has syntax errors; aborting without touching your install${NC}" >&2
         return 1
     fi
     if ! grep -q '^VERSION=' "$tmpfile"; then
         rm -f "$tmpfile"
-        echo "${RED}✗ El archivo descargado no parece ser godev; se aborta${NC}" >&2
+        echo "${RED}✗ The downloaded file does not look like godev; aborting${NC}" >&2
         return 1
     fi
 
@@ -1366,8 +1366,8 @@ updated_via=self-update
 EOF
 
     echo ""
-    echo "${GREEN}${BOLD}✓ Actualizado a v${remote_version}${NC}"
-    echo "${CYAN}Recargá tu shell para usar la nueva versión:${NC} source ~/.zshrc"
+    echo "${GREEN}${BOLD}✓ Updated to v${remote_version}${NC}"
+    echo "${CYAN}Reload your shell to use the new version:${NC} source ~/.zshrc"
     return 0
 }
 
@@ -1398,14 +1398,14 @@ print_shell_init() {
     local shell_name="$1" alias_name="$2"
 
     if [[ -n "$shell_name" && "$shell_name" != "zsh" ]]; then
-        echo "${RED}✗ godev --init sólo soporta zsh (recibido: ${shell_name})${NC}" >&2
-        echo "${GRAY}  godev requiere zsh para poder cambiar de directorio.${NC}" >&2
+        echo "${RED}✗ godev --init only supports zsh (got: ${shell_name})${NC}" >&2
+        echo "${GRAY}  godev needs zsh to change your shell directory.${NC}" >&2
         return 1
     fi
 
     cat << EOF
 ${GODEV_INIT_MARKER}
-# Generado por 'godev --init zsh' — no editar a mano.
+# Generated by 'godev --init zsh' — do not edit by hand.
 godev() {
     local godev_bin="${GODEV_BIN}"
 EOF
@@ -1413,8 +1413,8 @@ EOF
     local result exit_code
 
     if [[ ! -x "$godev_bin" ]]; then
-        print -u2 "godev: no se encontró el binario en $godev_bin"
-        print -u2 "godev: regenerá el wrapper con: godev --init --install"
+        print -u2 "godev: binary not found at $godev_bin"
+        print -u2 "godev: regenerate the wrapper with: godev --init --install"
         return 127
     fi
 
@@ -1466,14 +1466,14 @@ _godev_warn_alias_collision() {
 
     existing=$(grep -n "^[[:space:]]*alias ${name}=" "$zshrc" 2>/dev/null | head -1)
     if [[ -n "$existing" ]]; then
-        echo "${YELLOW}⚠ Ya hay un alias '${name}' en tu .zshrc:${NC} ${GRAY}${existing}${NC}"
+        echo "${YELLOW}⚠ There is already a '${name}' alias in your .zshrc:${NC} ${GRAY}${existing}${NC}"
         collided=0
     fi
 
     if (( ${GODEV_OMZ_GIT_ALIASES[(I)$name]} )) && [[ -d "$HOME/.oh-my-zsh" ]]; then
         if grep -qE '^[[:space:]]*plugins=.*\bgit\b' "$zshrc" 2>/dev/null; then
-            echo "${YELLOW}⚠ '${name}' es un alias del plugin 'git' de oh-my-zsh, que tenés activo.${NC}"
-            echo "${GRAY}  Definirlo acá lo pisa en silencio: el comando original deja de funcionar.${NC}"
+            echo "${YELLOW}⚠ '${name}' is an alias from oh-my-zsh's git plugin, which you have enabled.${NC}"
+            echo "${GRAY}  Defining it here shadows that silently: the original command stops working.${NC}"
             collided=0
         fi
     fi
@@ -1495,21 +1495,21 @@ install_shell_init() {
 
     # --- Plan ---------------------------------------------------------------
     echo ""
-    echo "${BOLD}godev — integración con zsh${NC}"
+    echo "${BOLD}godev — zsh integration${NC}"
     echo ""
-    echo "  Binario:  ${CYAN}${GODEV_BIN}${NC}"
-    echo "  Destino:  ${CYAN}${zshrc}${NC}"
+    echo "  Binary:  ${CYAN}${GODEV_BIN}${NC}"
+    echo "  Target:  ${CYAN}${zshrc}${NC}"
     echo ""
 
-    plan+=("Backup de ~/.zshrc con timestamp")
-    (( has_old_fn == 0 )) && plan+=("Quitar la función godev() anterior (queda en el backup)")
+    plan+=("Back up ~/.zshrc with a timestamp")
+    (( has_old_fn == 0 )) && plan+=("Remove the previous godev() function (kept in the backup)")
     if (( has_init_line == 0 )); then
-        plan+=("Regenerar la línea de integración (ya estaba presente)")
+        plan+=("Regenerate the integration line (already present)")
     else
-        plan+=("Agregar: ${GODEV_INIT_LINE}")
+        plan+=("Add: ${GODEV_INIT_LINE}")
     fi
 
-    echo "${BOLD}Se va a hacer:${NC}"
+    echo "${BOLD}What will happen:${NC}"
     local step
     for step in "${plan[@]}"; do
         echo "  ${GREEN}•${NC} $step"
@@ -1518,46 +1518,46 @@ install_shell_init() {
     # --- Alias --------------------------------------------------------------
     if [[ -z "$alias_name" && "$assume_yes" != "true" ]] && [[ -t 0 || -e /dev/tty ]]; then
         echo ""
-        echo "${GRAY}Un alias corto es opcional. Por defecto no se agrega ninguno.${NC}"
-        echo -n "¿Agregar un alias para godev? Escribí el nombre o Enter para omitir: "
+        echo "${GRAY}A short alias is optional. None is added by default.${NC}"
+        echo -n "Add an alias for godev? Type a name, or press Enter to skip: "
         read alias_name < /dev/tty
         alias_name="${alias_name//[[:space:]]/}"
     fi
 
     if [[ -n "$alias_name" ]]; then
         if [[ ! "$alias_name" =~ ^[a-zA-Z_][a-zA-Z0-9_-]*$ ]]; then
-            echo "${RED}✗ '${alias_name}' no es un nombre de alias válido${NC}" >&2
+            echo "${RED}✗ '${alias_name}' is not a valid alias name${NC}" >&2
             return 1
         fi
         echo ""
         if _godev_warn_alias_collision "$alias_name" "$zshrc"; then
             if [[ "$assume_yes" == "true" ]]; then
-                echo "${CYAN}Alias omitido (modo no interactivo). Agregalo a mano si lo querés.${NC}"
+                echo "${CYAN}Alias skipped (non-interactive). Add it by hand if you want it.${NC}"
                 alias_name=""
             else
-                echo -n "${BOLD}Aun así, ¿agregar 'alias ${alias_name}=godev'? (y/N): ${NC}"
+                echo -n "${BOLD}Add 'alias ${alias_name}=godev' anyway? (y/N): ${NC}"
                 local ans
                 read -k 1 ans < /dev/tty
                 echo
                 if [[ ! "$ans" =~ ^[yY]$ ]]; then
-                    echo "${CYAN}Alias omitido${NC}"
+                    echo "${CYAN}Alias skipped${NC}"
                     alias_name=""
                 fi
             fi
         else
-            echo "  ${GREEN}•${NC} Agregar: alias ${alias_name}='godev'"
+            echo "  ${GREEN}•${NC} Add: alias ${alias_name}='godev'"
         fi
     fi
 
     # --- Confirmación -------------------------------------------------------
     if [[ "$assume_yes" != "true" ]]; then
         echo ""
-        echo -n "${BOLD}¿Continuar? (y/N): ${NC}"
+        echo -n "${BOLD}Continue? (y/N): ${NC}"
         local answer
         read -k 1 answer < /dev/tty
         echo
         if [[ ! "$answer" =~ ^[yY]$ ]]; then
-            echo "${CYAN}Cancelado. No se modificó nada.${NC}"
+            echo "${CYAN}Cancelled. Nothing was changed.${NC}"
             return 0
         fi
     fi
@@ -1565,7 +1565,7 @@ install_shell_init() {
     # --- Backup -------------------------------------------------------------
     local backup="${zshrc}.backup-$(date +%s)"
     if ! cp "$zshrc" "$backup"; then
-        echo "${RED}✗ No se pudo crear el backup; se aborta sin tocar tu .zshrc${NC}" >&2
+        echo "${RED}✗ Could not create the backup; aborting without touching your .zshrc${NC}" >&2
         return 1
     fi
     echo "${GRAY}Backup: ${backup}${NC}"
@@ -1575,7 +1575,7 @@ install_shell_init() {
     # de integración previa. NO toca aliases escritos a mano por el usuario.
     local tmpfile
     tmpfile=$(mktemp "${zshrc}.new.XXXXXX") || {
-        echo "${RED}✗ No se pudo crear el archivo temporal${NC}" >&2
+        echo "${RED}✗ Could not create the temporary file${NC}" >&2
         return 1
     }
 
@@ -1584,6 +1584,7 @@ install_shell_init() {
         $0 == initline { next }
         /^eval "\$\((command )?godev --init zsh\)"$/ { next }
         /^# godev - Function wrapper \(added by installer\)$/ { next }
+        /^# Generated by .godev --init zsh. — do not edit by hand\.$/ { next }
         /^# Generado por .godev --init zsh. — no editar a mano\.$/ { next }
         /^godev\(\) \{/ { inblock = 1; next }
         inblock && /^\}[[:space:]]*$/ { inblock = 0; next }
@@ -1591,7 +1592,7 @@ install_shell_init() {
         { print }
     ' "$zshrc" > "$tmpfile" || {
         rm -f "$tmpfile"
-        echo "${RED}✗ Falló la reescritura; tu .zshrc quedó intacto${NC}" >&2
+        echo "${RED}✗ Rewrite failed; your .zshrc is unchanged${NC}" >&2
         return 1
     }
 
@@ -1605,18 +1606,18 @@ install_shell_init() {
     # Validar que el .zshrc resultante parsea antes de instalarlo
     if ! zsh -n "$tmpfile" 2>/dev/null; then
         rm -f "$tmpfile"
-        echo "${RED}✗ El .zshrc resultante tiene errores de sintaxis; se aborta.${NC}" >&2
-        echo "${GRAY}  Tu archivo original quedó sin cambios.${NC}" >&2
+        echo "${RED}✗ The resulting .zshrc has syntax errors; aborting.${NC}" >&2
+        echo "${GRAY}  Your original file is unchanged.${NC}" >&2
         return 1
     fi
 
     if ! mv "$tmpfile" "$zshrc"; then
         rm -f "$tmpfile"
-        echo "${RED}✗ No se pudo escribir ${zshrc}${NC}" >&2
+        echo "${RED}✗ Could not write ${zshrc}${NC}" >&2
         return 1
     fi
 
-    echo "${GREEN}✓ Integración instalada${NC}"
+    echo "${GREEN}✓ Shell integration installed${NC}"
 
     # --- Shadowing de PATH --------------------------------------------------
     local -a shadows
@@ -1624,26 +1625,26 @@ install_shell_init() {
     shadows=(${shadows:#})
     if (( ${#shadows} > 0 )); then
         echo ""
-        echo "${YELLOW}${BOLD}⚠ Hay otras copias de godev instaladas:${NC}"
+        echo "${YELLOW}${BOLD}⚠ Other godev copies are installed:${NC}"
         local sh
         for sh in "${shadows[@]}"; do
             echo "   ${YELLOW}${sh}${NC}"
         done
         echo ""
-        echo "${GRAY}El wrapper nuevo apunta a ${GODEV_BIN}, así que vas a usar esa.${NC}"
-        echo "${GRAY}Las otras quedan huérfanas y pueden confundir a futuro.${NC}"
-        echo "${GRAY}Revisalas y borrá a mano las que no quieras. godev no borra nada.${NC}"
+        echo "${GRAY}The new wrapper points at ${GODEV_BIN}, so that is the one you will use.${NC}"
+        echo "${GRAY}The others are orphaned and may confuse you later.${NC}"
+        echo "${GRAY}Review them and remove the ones you do not want. godev deletes nothing.${NC}"
     fi
 
     echo ""
     if (( ${+functions[godev]} )); then
         # Hay una función godev definida en el shell que invocó esto. Si es la
         # vieja, un `source` la haría interceptar el propio eval de arriba.
-        echo "${CYAN}Abrí una terminal nueva${NC} ${GRAY}(o: exec zsh)${NC}"
-        echo "${GRAY}Un simple 'source ~/.zshrc' no alcanza: la función godev que ya${NC}"
-        echo "${GRAY}está cargada en esta sesión interceptaría la nueva integración.${NC}"
+        echo "${CYAN}Open a new terminal${NC} ${GRAY}(or: exec zsh)${NC}"
+        echo "${GRAY}A plain 'source ~/.zshrc' is not enough: the godev function already${NC}"
+        echo "${GRAY}loaded in this session would intercept the new integration.${NC}"
     else
-        echo "${CYAN}Recargá tu shell:${NC} source ~/.zshrc"
+        echo "${CYAN}Reload your shell:${NC} source ~/.zshrc"
     fi
     return 0
 }
@@ -1660,8 +1661,8 @@ shell_init_command() {
             zsh|bash|fish|sh) shell_name="$1" ;;
             "") ;;
             *)
-                echo "${RED}✗ Argumento desconocido para --init: $1${NC}" >&2
-                echo "${GRAY}  Uso: godev --init [zsh] [--install] [--yes] [--alias NOMBRE]${NC}" >&2
+                echo "${RED}✗ Unknown argument for --init: $1${NC}" >&2
+                echo "${GRAY}  Usage: godev --init [zsh] [--install] [--yes] [--alias NAME]${NC}" >&2
                 return 1
                 ;;
         esac

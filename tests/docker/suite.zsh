@@ -19,7 +19,7 @@ cp /src/godev ~/.local/bin/godev && chmod +x ~/.local/bin/godev
 echo '# mi zshrc' > ~/.zshrc
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
 out=$(~/.local/bin/godev --init --install --yes 2>&1)
-check "instala sin preguntar" "$out" "✓ Integración instalada"
+check "instala sin preguntar" "$out" "✓ Shell integration installed"
 check "reporta el binario" "$out" "/home/tester/.local/bin/godev"
 grep -qE '^eval "\$\((command )?godev --init zsh\)"$' ~/.zshrc && ok "línea eval presente" || bad "línea eval ausente"
 [[ -n "$(find ~ -maxdepth 1 -name ".zshrc.backup-*" 2>/dev/null)" ]] && ok "backup creado" || bad "backup ausente"
@@ -88,7 +88,7 @@ sed 's/^VERSION="[^"]*"/VERSION="0.0.1"/' /src/godev > ~/brew/Cellar/godev/9.9.9
 chmod +x ~/brew/Cellar/godev/9.9.9/bin/godev
 sum_before=$(md5sum ~/brew/Cellar/godev/9.9.9/bin/godev | cut -d' ' -f1)
 out=$(~/brew/bin/godev --update 2>&1 </dev/null)
-check "detecta gestión por Homebrew" "$out" "la gestiona Homebrew"
+check "detecta gestión por Homebrew" "$out" "managed by Homebrew"
 check "sugiere brew upgrade" "$out" "brew upgrade godev"
 sum_after=$(md5sum ~/brew/Cellar/godev/9.9.9/bin/godev | cut -d' ' -f1)
 [[ "$sum_before" == "$sum_after" ]] && ok "EL CELLAR QUEDÓ SIN TOCAR" || bad "¡se modificó el Cellar!"
@@ -101,14 +101,14 @@ echo "═══ 7. --update standalone: destino = binario real ═══"
 sed 's/^VERSION="[^"]*"/VERSION="0.0.1"/' /src/godev > ~/.local/bin/godev
 chmod +x ~/.local/bin/godev
 out=$(~/.local/bin/godev --update 2>&1 </dev/null)
-check "anuncia versión nueva" "$out" "Hay una versión nueva"
-[[ "$out" == *"la gestiona Homebrew"* ]] && bad "confundió standalone con brew" || ok "detectado como standalone"
+check "anuncia versión nueva" "$out" "A new version is available"
+[[ "$out" == *"managed by Homebrew"* ]] && bad "confundió standalone con brew" || ok "detectado como standalone"
 
 echo ""
 echo "═══ 8. errores de --init ═══"
-out=$(~/.local/bin/godev --init bash 2>&1); check "rechaza bash" "$out" "sólo soporta zsh"
-out=$(~/.local/bin/godev --init pepe 2>&1); check "rechaza arg inválido" "$out" "Argumento desconocido"
-out=$(~/.local/bin/godev --init --install --yes --alias '1mal' 2>&1); check "rechaza alias inválido" "$out" "no es un nombre de alias válido"
+out=$(~/.local/bin/godev --init bash 2>&1); check "rechaza bash" "$out" "only supports zsh"
+out=$(~/.local/bin/godev --init pepe 2>&1); check "rechaza arg inválido" "$out" "Unknown argument"
+out=$(~/.local/bin/godev --init --install --yes --alias '1mal' 2>&1); check "rechaza alias inválido" "$out" "is not a valid alias name"
 
 echo ""
 echo "═══ 9. flujo INTERACTIVO con tty real ═══"
@@ -137,15 +137,15 @@ while True:
     except OSError: break
     if not d: break
     buf += d
-    if sent == 0 and b"alias" in buf and b"omitir" in buf:
+    if sent == 0 and b"alias" in buf and b"skip" in buf:
         os.write(fd, b"\n"); sent = 1
-    elif sent == 1 and b"Continuar" in buf:
+    elif sent == 1 and b"Continue?" in buf:
         os.write(fd, b"y"); sent = 2
 sys.stdout.write(buf.decode("utf-8", "replace"))
 ' 2>&1)
-check "pregunta por el alias" "$out" "¿Agregar un alias"
-check "pide confirmación" "$out" "¿Continuar?"
-check "instala tras confirmar" "$out" "Integración instalada"
+check "pregunta por el alias" "$out" "Add an alias for godev"
+check "pide confirmación" "$out" "Continue?"
+check "instala tras confirmar" "$out" "Shell integration installed"
 grep -qE '^eval "\$\((command )?godev --init zsh\)"$' ~/.zshrc && ok "línea escrita en modo interactivo" || bad "no escribió la línea"
 grep -q "^alias " ~/.zshrc && bad "agregó un alias sin pedirlo" || ok "sin alias por defecto"
 
@@ -166,13 +166,13 @@ while True:
     except OSError: break
     if not d: break
     buf += d
-    if sent == 0 and b"omitir" in buf:
+    if sent == 0 and b"skip" in buf:
         os.write(fd, b"\n"); sent = 1
-    elif sent == 1 and b"Continuar" in buf:
+    elif sent == 1 and b"Continue?" in buf:
         os.write(fd, b"n"); sent = 2
 sys.stdout.write(buf.decode("utf-8", "replace"))
 ' 2>&1)
-check "reporta cancelación" "$out" "Cancelado"
+check "reporta cancelación" "$out" "Cancelled"
 after=$(md5sum ~/.zshrc | cut -d" " -f1)
 [[ "$before" == "$after" ]] && ok "el .zshrc quedó BYTE A BYTE igual" || bad "modificó el .zshrc al cancelar"
 
@@ -249,11 +249,11 @@ EOF
 
 # El síntoma: `godev --init` a través del wrapper viejo NO funciona
 out=$(zsh -c 'source ~/.zshrc >/dev/null 2>&1; godev --init --install --yes' 2>&1 </dev/null)
-[[ "$out" == *"Integración instalada"* ]] && bad "el wrapper viejo alcanzó --init (inesperado)" || ok "reproducido: el wrapper viejo NO llega a --init"
+[[ "$out" == *"Shell integration installed"* ]] && bad "el wrapper viejo alcanzó --init (inesperado)" || ok "reproducido: el wrapper viejo NO llega a --init"
 
 # El arreglo documentado: llamar al binario nuevo por ruta explícita
 out=$(~/brew/bin/godev --init --install --yes 2>&1 </dev/null)
-check "la ruta explícita sí funciona" "$out" "Integración instalada"
+check "la ruta explícita sí funciona" "$out" "Shell integration installed"
 check "avisa del binario viejo (shadowing)" "$out" "/home/tester/.local/bin/godev"
 rm -f ~/.local/bin/godev
 res=$(zsh -c 'source ~/.zshrc >/dev/null 2>&1; godev gamma >/dev/null 2>&1; echo $PWD')
