@@ -157,10 +157,10 @@ echo "${GREEN}✓ Permissions set${NC}"
 echo ""
 echo "${CYAN}[7/10]${NC} Setting up shell integration..."
 
-# La función wrapper la genera el propio godev (`godev --init zsh`), no este
-# instalador. Así hay una sola implementación del wrapper y no dos que se
-# desincronizan. `--init --install` hace backup del .zshrc, quita el wrapper
-# viejo si lo hay, y valida el resultado con `zsh -n` antes de reemplazar nada.
+# godev generates the wrapper itself (`godev --init zsh`); this installer does
+# not. That keeps one implementation of the wrapper instead of two that drift
+# apart. `--init --install` backs up the .zshrc, removes the old wrapper if one
+# is present, and validates the result with `zsh -n` before replacing anything.
 if "$GODEV_SCRIPT" --init --install --yes; then
     echo "${GREEN}✓ Shell integration configured${NC}"
 else
