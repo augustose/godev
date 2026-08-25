@@ -1,84 +1,63 @@
-# Publicar godev en Homebrew
+# Publishing godev to Homebrew
 
-**Estado: publicado.** El tap vive en
-[augustose/homebrew-godev](https://github.com/augustose/homebrew-godev) y
-`brew install augustose/godev/godev` funciona. Lo que sigue queda como
-referencia para los próximos releases.
+**Status: published.** The tap lives at
+[augustose/homebrew-godev](https://github.com/augustose/homebrew-godev) and
+`brew install augustose/godev/godev` works. What follows is the reference for
+future releases.
 
-## 1. Cortar el release
+## 1. Cut the release
 
-El hook `pre-commit` auto-incrementa el PATCH en cada commit que toque `godev`, pero
-respeta un `VERSION` cambiado a mano. Así que el bump va en el último commit antes
-del tag, y el tag sale de ese commit exacto.
+The `pre-commit` hook auto-increments the PATCH on every commit that touches
+`godev`, but it honours a manually changed `VERSION`. So the bump belongs in the
+last commit before the tag, and the tag is cut from that exact commit.
 
 ```bash
-grep -m1 '^VERSION=' godev          # confirmar que dice 2.7.0
-git tag -a v2.7.0 -m "v2.7.0 — Homebrew support"
+grep -m1 '^VERSION=' godev          # confirm the intended version
+git tag -a v2.8.1 -m "v2.8.1"
 git push origin main --tags
-gh release create v2.7.0 --title "v2.7.0" --notes "Homebrew support, godev --init"
+gh release create v2.8.1 --title "v2.8.1" --notes "..."
 ```
 
-El release importa: `_resolve_remote()` prioriza GitHub Releases sobre la rama.
+The release matters: `_resolve_remote()` prefers GitHub Releases over the branch.
 
-## 2. Calcular el sha256 del tarball
+## 2. Compute the tarball sha256
 
 ```bash
-curl -fsSL https://github.com/augustose/godev/archive/refs/tags/v2.7.0.tar.gz | shasum -a 256
+curl -fsSL https://github.com/augustose/godev/archive/refs/tags/v2.8.1.tar.gz | shasum -a 256
 ```
 
-## 3. Crear el tap
+## 3. Update the tap
 
-El repo **tiene que** llamarse `homebrew-godev` para que `brew tap augustose/godev`
-resuelva.
+The repository **must** be named `homebrew-godev` for `brew tap augustose/godev`
+to resolve.
 
 ```bash
-gh repo create augustose/homebrew-godev --public \
-  --description "Homebrew tap for godev"
 git clone https://github.com/augustose/homebrew-godev
-mkdir -p homebrew-godev/Formula
 cp packaging/godev.rb homebrew-godev/Formula/godev.rb
-# reemplazar REPLACE_WITH_TARBALL_SHA256 por el sha del paso 2
+# replace url and sha256 with the values from steps 1 and 2
 ```
 
-## 4. Validar antes de anunciar
+## 4. Validate before announcing
 
 ```bash
-brew install --build-from-source augustose/godev/godev
+brew update
+brew upgrade godev          # or: brew install --build-from-source
 brew test godev
-brew audit --strict augustose/godev/godev
-godev --version          # debe coincidir con el tag
-godev --update           # debe redirigir a `brew upgrade godev`, sin descargar
+godev --version             # must match the tag
+godev --update              # must redirect to `brew upgrade godev`, downloading nothing
 ```
 
-> **Nota:** en esta máquina `brew audit` falla por un problema del bundle de gems
-> vendorizado de Homebrew (`json` compilado contra otra portable-ruby), no del
-> Formula. Si vuelve a pasar: `brew update-reset` suele reconstruirlo. `brew audit`
-> además activa el modo developer solo (`homebrew.devcmdrun`); se revierte con
-> `git -C "$(brew --repository)" config --unset homebrew.devcmdrun`.
+## Lessons from the first releases
 
-## 5. Actualizar en cada release futuro
-
-Bump manual de `VERSION` → tag → release → nuevo `sha256` → commit en el tap.
-Cuando la cadencia lo justifique, automatizar con `brew bump-formula-pr`.
-
-## Por qué no homebrew-core
-
-homebrew-core exige notoriedad (~75 stars / 30 forks / 30 watchers) y revisión de
-mantenedores. El tap propio no tiene requisitos y se publica hoy. La postulación a
-core queda para cuando el proyecto tenga tracción; el Formula ya está escrito para
-pasar `brew audit --strict`.
-
-## Aprendizajes del primer release
-
-- **`assert_match` necesita String o Regexp, no `Pathname`.** `assert_match
-  bin/"godev", init` falla con *"Expected #<Pathname:...> to respond to #=~"*.
-  Interpolar: `assert_match "#{bin}/godev", init`. Sólo aparece al correr
-  `brew test` contra la instalación real — `ruby -c` no lo detecta.
-- **`brew audit` puede romper `brew install`.** Activa el modo developer solo y
-  construye el bundle de gems vendorizado. En esta máquina el `json 2.21.2` que
-  pinea el `Gemfile.lock` de Homebrew es incompatible con la portable-ruby 4.0.6
-  (que trae json 2.18.0 de stdlib), y deja `brew install`/`config` caídos con
-  *"undefined method 'default_sort_keys_proc='"*. Se sale quitando el gem:
+- **`assert_match` needs a String or Regexp, not a `Pathname`.** `assert_match
+  bin/"godev", init` fails with *"Expected #<Pathname:...> to respond to #=~"*.
+  Interpolate instead: `assert_match "#{bin}/godev", init`. Only `brew test`
+  against a real install catches this — `ruby -c` does not.
+- **`brew audit` can break `brew install`.** It silently turns on developer mode
+  and builds the vendored gem bundle. On this machine the `json 2.21.2` pinned by
+  Homebrew's own `Gemfile.lock` is incompatible with portable-ruby 4.0.6 (which
+  ships json 2.18.0 in stdlib), leaving `brew install` and `brew config` broken
+  with *"undefined method 'default_sort_keys_proc='"*. Recover by removing the gem:
 
   ```bash
   B=/opt/homebrew/Library/Homebrew/vendor/bundle/ruby/4.0.0
@@ -86,5 +65,16 @@ pasar `brew audit --strict`.
   git -C "$(brew --repository)" config --unset homebrew.devcmdrun
   ```
 
-  Por eso `brew audit` **no** está en el camino crítico de validación. `brew
-  install --build-from-source` + `brew test` sí, y alcanzan.
+  For that reason `brew audit` is **not** on the critical validation path.
+  `brew install` plus `brew test` are, and they are enough.
+- **Watch the `&&` chain when tagging.** `git add` refuses gitignored paths and
+  returns non-zero, which skips the commit — but a `git tag` on the next line
+  still runs, leaving the tag on the wrong commit. Verify with
+  `git log --oneline -1 <tag>` before creating the release.
+
+## Why not homebrew-core
+
+homebrew-core requires notability (~75 stars / 30 forks / 30 watchers) and
+maintainer review. A personal tap has no such requirements. Applying to core is
+for when the project has traction; the formula is already written to pass
+`brew audit --strict`.

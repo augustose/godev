@@ -379,13 +379,15 @@ brew upgrade godev
 ```zsh
 $ godev react
 
-Múltiples proyectos encontrados con 'react':
+Multiple projects found matching 'react':
 
- 1) react-dashboard         [main - ✓]         ●●● (45 commits)
- 2) react-native-app        [develop - ●]      ●●○ (12 commits)
- 3) react-admin-panel       [feature/auth - ✓] ●○○ (3 commits)
+┌─────────────────────────────────────────────────────────
+ 1) react-dashboard                      [main - ✓]
+ 2) react-native-app                     [develop - ●]
+ 3) react-admin-panel                    [feature/auth - ✓]
+└─────────────────────────────────────────────────────────
 
-Selecciona: 2
+Select a number (1-3) or Enter to cancel: 2
 ✓ You're in react-native-app
 ```
 
@@ -399,9 +401,9 @@ $ godev --list
 PROJECT                    LAST COMMIT      BRANCH       STATUS       ACTIVITY (30d)
 ─────────────────────────────────────────────────────────────────────────────────────
 godev                     hoy              main         ● modified   ●●● (35)
-webapp                    2 días           develop      ✓ clean      ●●○ (12)
-api-backend               7 días           main         ✓ clean      ●○○ (4)
-mobile-app                21 días          feature/auth ● modified   ○○○ (0)
+webapp                    today            develop      ✓ clean      ●●○ (12)
+api-backend               7 days           main         ✓ clean      ●○○ (4)
+mobile-app                21 days          feature/auth ● modified   ○○○ (0)
 ```
 
 **NEW in v2.2.0:** LAST COMMIT now shows in consistent day format. Sort by activity with `--sort-by-commit`.
@@ -418,7 +420,7 @@ $ godev stud -l
 <img src="images/godev-l.png" alt="godev list with pattern filtering" width="800">
 </div>
 
-*Shows projects matching "stud" with Git status, branches, and activity. Notice the **LAST COMMIT** now displays in consistent day format (33 días, 31 días).*
+*Shows projects matching "stud" with Git status, branches, and activity. Notice the **LAST COMMIT** now displays in consistent day format (33 days, 31 days).*
 
 #### Example 3: Interactive Mode with FZF
 
@@ -437,11 +439,11 @@ $ godev
 ```zsh
 $ godev my-new-project
 
-⚠ Proyecto 'my-new-project' no encontrado
+⚠ Project 'my-new-project' not found
 
-¿Crear nuevo proyecto 'my-new-project' en ~/dev? (s/N): s
+Create new project 'my-new-project' in ~/dev? (y/N): y
 
-✓ Proyecto creado
+✓ Project created
 ✓ You're in my-new-project
 ```
 

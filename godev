@@ -3,7 +3,7 @@
 # godev - Development Directory Navigation Tool
 # Version: 1.0.0
 
-VERSION="2.8.0"
+VERSION="2.8.1"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/godev"
 CONFIG_FILE="$CONFIG_DIR/config"
 
@@ -266,11 +266,11 @@ get_git_info() {
         days_since_numeric=$((diff / 86400))
 
         if (( days_since_numeric == 0 )); then
-            days_since="hoy"
+            days_since="today"
         elif (( days_since_numeric == 1 )); then
-            days_since="1 día"
+            days_since="1 day"
         else
-            days_since="${days_since_numeric} días"
+            days_since="${days_since_numeric} days"
         fi
     fi
     info[last_commit]="$days_since"
@@ -370,11 +370,14 @@ find_project() {
                     # Show git info if it exists
                     if [[ -d "$match/.git" ]]; then
                         local branch=$(git -C "$match" rev-parse --abbrev-ref HEAD 2>/dev/null)
-                        local status="clean"
+                        # NO usar `status`: en zsh es una variable especial de
+                        # sólo lectura (sinónimo de $?), y `local status` aborta
+                        # el bucle, rompiendo el multi-match sin FZF.
+                        local project_status="clean"
                         if ! git -C "$match" diff-index --quiet HEAD -- 2>/dev/null; then
-                            status="modified"
+                            project_status="modified"
                         fi
-                        if [[ "$status" == "modified" ]]; then
+                        if [[ "$project_status" == "modified" ]]; then
                             git_info="${GRAY}[${CYAN}$branch${GRAY} - ${YELLOW}●${GRAY}]${NC}"
                         else
                             git_info="${GRAY}[${CYAN}$branch${GRAY} - ${GREEN}✓${GRAY}]${NC}"

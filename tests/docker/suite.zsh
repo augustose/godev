@@ -324,6 +324,45 @@ n=$(grep -c 'godev --init zsh' ~/.zshrc)
 check "y queda en la forma nueva" "$(grep '^eval ' ~/.zshrc)" 'command godev'
 
 echo ""
+echo "═══ 14. multi-match SIN fzf (zsh: `status` es readonly) ═══"
+# En zsh `status` es una variable especial de sólo lectura (sinónimo de $?).
+# Un `local status=...` aborta el bucle y el multi-match manual queda roto:
+# en vez de la lista numerada, ofrece crear un proyecto.
+export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
+cp /src/godev ~/.local/bin/godev && chmod +x ~/.local/bin/godev
+mkdir -p ~/.config/godev
+printf 'GODEV_BASE_DIR="/home/tester/dev"\nGODEV_FZF_ENABLED="false"\n' > ~/.config/godev/config
+for prj in multi-one multi-two; do
+    mkdir -p ~/dev/$prj && (cd ~/dev/$prj && git init -q && echo x > f && git add . && git commit -qm init)
+done
+(cd ~/dev/multi-one && echo change >> f)
+out=$(echo "" | ~/.local/bin/godev multi- 2>&1)
+[[ "$out" == *"read-only variable"* ]] && bad "regresión: 'local status' rompe el bucle" || ok "sin error de variable de sólo lectura"
+check "muestra la lista de coincidencias" "$out" "Multiple projects found matching"
+plain=$(print -r -- "$out" | sed $'s/\033\[[0-9;]*m//g')
+check "numera la primera opción" "$plain" " 1) multi-one"
+check "numera la segunda opción" "$plain" " 2) multi-two"
+check "marca el proyecto modificado" "$out" "multi-one"
+check "pide selección" "$out" "Select a number (1-2)"
+
+echo ""
+echo "═══ 15. salida en inglés, sin restos en español ═══"
+allout=""
+allout+=$(~/.local/bin/godev --init bash 2>&1)
+allout+=$(~/.local/bin/godev --init pepe 2>&1)
+allout+=$(echo "" | ~/.local/bin/godev multi- 2>&1)
+allout+=$(echo "n" | ~/.local/bin/godev inexistente-xyz 2>&1)
+allout+=$(~/.local/bin/godev --list 2>&1)
+allout+=$(~/.local/bin/godev --help 2>&1)
+if echo "$allout" | grep -qE '[áéíóúñ¿¡]'; then
+    bad "quedó texto en español en la salida"
+    echo "$allout" | grep -oE '[^ ]*[áéíóúñ¿¡][^ ]*' | sort -u | head -5 | sed 's/^/      /'
+else
+    ok "ninguna salida contiene caracteres del español"
+fi
+check "LAST COMMIT en inglés" "$(~/.local/bin/godev --list 2>&1)" "today"
+
+echo ""
 echo "═══════════════════════════════════════"
 echo "  PASS: $PASS   FAIL: $FAIL"
 echo "═══════════════════════════════════════"
